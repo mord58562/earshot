@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "F8B7B6F0-0001-4000-A000-000000000001",
+      "name": "Sennheiser HD 600",
+      "preampDB": -9.3,
+      "outputDeviceUID": null,
+      "bands": [
+        {"type": "parametric", "frequency": 20,    "gain":  4.0, "q": 1.10, "bypass": false},
+        {"type": "parametric", "frequency": 97,    "gain": -2.5, "q": 0.70, "bypass": false},
+        {"type": "lowShelf",   "frequency": 105,   "gain":  5.5, "q": 0.71, "bypass": false},
+        {"type": "parametric", "frequency": 215,   "gain": -1.7, "q": 1.10, "bypass": false},
+        {"type": "parametric", "frequency": 1400,  "gain": -2.1, "q": 1.50, "bypass": false},
+        {"type": "highShelf",  "frequency": 2000,  "gain":  3.0, "q": 0.71, "bypass": false},
+        {"type": "parametric", "frequency": 2700,  "gain": -1.3, "q": 3.00, "bypass": false},
+        {"type": "parametric", "frequency": 3370,  "gain": -3.9, "q": 2.50, "bypass": false},
+        {"type": "parametric", "frequency": 5350,  "gain": -3.5, "q": 3.00, "bypass": false},
+        {"type": "highShelf",  "frequency": 11000, "gain": -4.0, "q": 0.71, "bypass": false}
+      ]
+    },
+    {
+      "id": "F8B7B6F0-0001-4000-A000-000000000002",
+      "name": "Beyerdynamic DT 700 Pro X",
+      "preampDB": -4.4,
+      "outputDeviceUID": null,
+      "bands": [
+        {"type": "parametric", "frequency": 25,   "gain": -3.3, "q": 0.50, "bypass": false},
+        {"type": "lowShelf",   "frequency": 105,  "gain":  5.5, "q": 0.71, "bypass": false},
+        {"type": "parametric", "frequency": 120,  "gain": -4.5, "q": 1.00, "bypass": false},
+        {"type": "parametric", "frequency": 260,  "gain":  5.5, "q": 1.30, "bypass": false},
+        {"type": "parametric", "frequency": 1900, "gain": -1.8, "q": 1.40, "bypass": false},
+        {"type": "parametric", "frequency": 2650, "gain": -1.2, "q": 6.00, "bypass": false},
+        {"type": "parametric", "frequency": 3600, "gain":  3.6, "q": 1.40, "bypass": false},
+        {"type": "parametric", "frequency": 4850, "gain": -1.0, "q": 4.00, "bypass": false},
+        {"type": "parametric", "frequency": 6200, "gain": -3.1, "q": 3.00, "bypass": false},
+        {"type": "highShelf",  "frequency": 9000, "gain":  1.0, "q": 0.71, "bypass": false}
+      ]
+    }
+  ]
+}

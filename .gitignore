@@ -1,0 +1,8 @@
+Earshot.app/
+.build/
+.DS_Store
+*.swiftmodule
+*.swiftdoc
+*.o
+Resources/AppIcon.icns
+Resources/AppIcon.iconset/
