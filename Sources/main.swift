@@ -95,8 +95,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         lastClickTime = now
 
         if popover.isShown {
+            // popover.close() is unconditional. performClose() goes
+            // through the responder chain and bounces if a sheet (file
+            // picker, save dialog, room-correction wizard) is up on top
+            // of the popover - which meant the menubar icon stopped
+            // closing the popover the moment a sheet was open. close()
+            // tears down the popover regardless and the sheet's hosting
+            // window closes with it.
             Log.write("popover currently shown - closing")
-            popover.performClose(nil)
+            popover.close()
             return
         }
         guard let button = statusItem.button else {
