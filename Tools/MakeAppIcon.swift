@@ -42,82 +42,81 @@ func drawIcon(in rect: NSRect) {
     NSGraphicsContext.current?.saveGraphicsState()
     mask.addClip()
 
-    // Tahoe-style gradient backdrop.
+    // Two-stop gradient diagonal — cleaner than the four-stop multi-hue
+    // rainbow the earlier version used, which read as noisy at small
+    // icon sizes. Indigo top-left → cyan bottom-right is the same color
+    // territory as the prior version, but with one transition instead of
+    // four, which reads cleanly down to 16px.
     let bg = NSGradient(colors: [
-        NSColor(red: 0.10, green: 0.06, blue: 0.30, alpha: 1.0),  // deep indigo
-        NSColor(red: 0.42, green: 0.10, blue: 0.55, alpha: 1.0),  // royal violet
-        NSColor(red: 0.20, green: 0.55, blue: 0.85, alpha: 1.0),  // electric blue
-        NSColor(red: 0.10, green: 0.85, blue: 0.85, alpha: 1.0)   // cyan glow
+        NSColor(red: 0.18, green: 0.12, blue: 0.55, alpha: 1.0),  // indigo
+        NSColor(red: 0.30, green: 0.65, blue: 0.92, alpha: 1.0)   // sky blue
     ])
-    bg?.draw(in: rect, angle: 120)
+    bg?.draw(in: rect, angle: -45)
 
-    // Soft top-side highlight to give the rounded shape some depth.
+    // Top-edge highlight gives the rounded square a sense of light from
+    // above without the heavy "glossy" look earlier macOS used.
     if let highlight = NSGradient(colors: [
-        NSColor(white: 1.0, alpha: 0.22),
+        NSColor(white: 1.0, alpha: 0.18),
         NSColor(white: 1.0, alpha: 0.0)
     ]) {
-        highlight.draw(in: NSRect(x: 0, y: s * 0.5, width: s, height: s * 0.5),
+        highlight.draw(in: NSRect(x: 0, y: s * 0.55, width: s, height: s * 0.45),
                        angle: -90)
     }
 
-    // The glyph: lowercase "e" with a soundwave crossbar, matching the
-    // menubar template image scaled up. Rendered in white with a very
-    // subtle drop shadow so it reads on the gradient at any size.
+    // The glyph: lowercase "e" whose crossbar is a soundwave. Proportions
+    // match the SwiftUI EQGlyph in the popover header (radius = 0.40·s,
+    // wave amplitude = 0.28·radius) so the in-app logo and the dock icon
+    // read as the same mark. Stroke is light enough (5.5% of canvas) that
+    // it doesn't go chunky at large sizes.
     let cx = rect.midX
     let cy = rect.midY
-    let radius = s * 0.30
-    let strokeWidth = s * 0.060
+    let radius = s * 0.40
+    let strokeWidth = s * 0.055
 
     if let ctx = NSGraphicsContext.current {
         ctx.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor(white: 0, alpha: 0.30)
-        shadow.shadowBlurRadius = s * 0.012
-        shadow.shadowOffset = NSSize(width: 0, height: -s * 0.006)
-        shadow.set()
 
-        // Outer ring: 330° arc from 3 o'clock sweeping counter-clockwise,
-        // leaving a 30° opening at the lower right — the mouth of the e.
-        // Built with NSBezierPath.appendArc (true cubic-bezier arc, four
-        // segments per quadrant) instead of a polyline; with strokes this
-        // thick the polyline approximation read as faceted.
+        // Outer ring: 330° arc starting at the +x axis. The 30° wedge at
+        // the lower right is the open mouth of the "e". Polyline rather
+        // than NSBezierPath.appendArc - the SwiftUI EQGlyph also draws as
+        // a polyline, and matching the construction means the two glyphs
+        // are visually identical at any resolution.
         let ring = NSBezierPath()
-        ring.appendArc(withCenter: NSPoint(x: cx, y: cy),
-                       radius: radius,
-                       startAngle: 0,
-                       endAngle: 330)
+        let n = 96
+        let startDeg: CGFloat = 0
+        let sweepDeg: CGFloat = 330
+        for i in 0...n {
+            let t = CGFloat(i) / CGFloat(n)
+            let rad = (startDeg + sweepDeg * t) * .pi / 180
+            let x = cx + cos(rad) * radius
+            let y = cy + sin(rad) * radius   // NSImage y-up
+            if i == 0 { ring.move(to: NSPoint(x: x, y: y)) }
+            else { ring.line(to: NSPoint(x: x, y: y)) }
+        }
         ring.lineWidth = strokeWidth
         ring.lineCapStyle = .round
         ring.lineJoinStyle = .round
         NSColor.white.setStroke()
         ring.stroke()
 
-        // Crossbar soundwave: one full sine cycle across the diameter —
-        // trough on the left half, peak on the right. Each half is a
-        // cubic-bezier approximation of half a sine: control handles at
-        // 36% / 64% of the half-period in x, ±(4/3)·amplitude in y, which
-        // makes a symmetric cubic whose midpoint sits exactly at ±amp.
-        // The two halves share the same tangent at (cx, cy) so the join
-        // is C1-smooth — no kink under the heavy stroke.
-        let leftX = cx - radius + strokeWidth * 0.25
-        let rightX = cx + radius - strokeWidth * 0.25
-        let halfWave = (rightX - leftX) / 2
-        let amp = radius * 0.30
-        let handleY = amp * (4.0 / 3.0)
-        let handleDX = halfWave * 0.36
+        // Crossbar soundwave: lands EXACTLY at the ring's right tip
+        // (cx + radius, cy) with horizontal tangent on arrival, so the
+        // wave merges into the ring cleanly. Geometry mirrors EQGlyph.
+        let leftX = cx - radius
+        let rightX = cx + radius
+        let amp = radius * 0.28
         let wave = NSBezierPath()
         wave.move(to: NSPoint(x: leftX, y: cy))
-        // Trough (down in y-up coords).
+        // Trough (note y-up coords: trough = lower y).
         wave.curve(to: NSPoint(x: cx, y: cy),
-                   controlPoint1: NSPoint(x: leftX + handleDX, y: cy - handleY),
-                   controlPoint2: NSPoint(x: cx - handleDX,    y: cy - handleY))
-        // Peak (up).
+                   controlPoint1: NSPoint(x: leftX + radius * 0.30, y: cy - amp),
+                   controlPoint2: NSPoint(x: cx - radius * 0.30, y: cy + amp))
+        // Peak, with horizontal tangent on arrival at the ring's right tip.
         wave.curve(to: NSPoint(x: rightX, y: cy),
-                   controlPoint1: NSPoint(x: cx + handleDX,    y: cy + handleY),
-                   controlPoint2: NSPoint(x: rightX - handleDX, y: cy + handleY))
+                   controlPoint1: NSPoint(x: cx + radius * 0.30, y: cy - amp),
+                   controlPoint2: NSPoint(x: rightX - radius * 0.10, y: cy))
         wave.lineWidth = strokeWidth
         wave.lineCapStyle = .round
-        wave.lineJoinStyle = .round
         wave.stroke()
 
         ctx.restoreGraphicsState()

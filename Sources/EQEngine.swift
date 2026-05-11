@@ -291,9 +291,11 @@ final class EQEngine: @unchecked Sendable {
         self.sourceNode = sourceNode
         engine.attach(sourceNode)
 
-        let mixer = AVAudioMixerNode()
-        engine.attach(mixer)
-        self.mixer = mixer
+        // No mixer: a single-source linear chain doesn't need one, and
+        // AVAudioMixerNode silently inserts a small upsample/downsample
+        // stage at certain sample rates even when in/out formats match.
+        // Users reported the engine sounding subtly worse at 48 kHz than
+        // 44.1 kHz; removing the mixer removed that difference.
 
         let varispeed = AVAudioUnitVarispeed()
         varispeed.rate = 1.0
@@ -329,8 +331,7 @@ final class EQEngine: @unchecked Sendable {
             }
         }
 
-        engine.connect(sourceNode, to: mixer, format: stereoFormat)
-        engine.connect(mixer, to: varispeed, format: stereoFormat)
+        engine.connect(sourceNode, to: varispeed, format: stereoFormat)
         engine.connect(varispeed, to: eq, format: stereoFormat)
         engine.connect(eq, to: engine.outputNode, format: stereoFormat)
 

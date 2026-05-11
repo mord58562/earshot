@@ -63,6 +63,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         state.appWillTerminate()
     }
 
+    // NSPopoverDelegate. Gate background work that only matters when the
+    // UI is on-screen (meter ticker + level @Published storm) on these
+    // callbacks - dropped CPU usage substantially when the popover is
+    // closed, which is most of the time.
+    func popoverDidShow(_ notification: Notification) {
+        state.setPopoverVisible(true)
+    }
+    func popoverDidClose(_ notification: Notification) {
+        state.setPopoverVisible(false)
+    }
+
     @objc private func handleStatusClick(_ sender: Any?) {
         let event = NSApp.currentEvent
         Log.write("status click received, event=\(event?.type.rawValue ?? 0)")

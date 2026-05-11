@@ -10,31 +10,35 @@ struct PopoverRoot: View {
     @State private var showingSaveSheet = false
     @State private var renameTarget: EQPreset?
     @State private var showingHeadphoneSearch = false
+    @State private var showingRoomCorrection = false
     @State private var importErrorMessage: String?
+    /// Local NSEvent monitor installed while the popover is visible so
+    /// Cmd-Z / Cmd-Shift-Z reach the EQ even though we're inside an
+    /// NSPopover (which doesn't forward to the standard responder chain).
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
             HeaderBar(state: state)
 
-            VStack(spacing: 14) {
-                HowItWorksHint()
-                RoutingRow(state: state)
+            VStack(spacing: 12) {
+                // Output picker moved into HeaderBar; no separate routing row.
 
                 Divider().opacity(0.18)
 
                 if isExpanded {
-                    EQEditor(state: state)
+                    EQEditor(state: state, isExpanded: $isExpanded)
                 } else {
-                    HeroCurveView(state: state)
+                    HeroCurveView(state: state, isExpanded: $isExpanded)
                 }
 
                 PreampRow(state: state)
 
                 ToolbarRow(state: state,
-                           isExpanded: $isExpanded,
                            showingSaveSheet: $showingSaveSheet,
                            savePresetName: $savePresetName,
                            showingHeadphoneSearch: $showingHeadphoneSearch,
+                           showingRoomCorrection: $showingRoomCorrection,
                            importErrorMessage: $importErrorMessage)
             }
             .padding(.horizontal, 16)
@@ -45,7 +49,7 @@ struct PopoverRoot: View {
 
             PresetList(state: state, renameTarget: $renameTarget)
 
-            FooterBar(state: state)
+            ErrorStrip(state: state)
         }
         .frame(width: 480)
         .background(.thickMaterial)
@@ -70,12 +74,66 @@ struct PopoverRoot: View {
                 showingHeadphoneSearch = false
             }
         }
+        .sheet(isPresented: $showingRoomCorrection) {
+            RoomCorrectionWizard(state: state) {
+                showingRoomCorrection = false
+            }
+        }
         .alert("Couldn't import", isPresented: Binding(
             get: { importErrorMessage != nil },
             set: { if !$0 { importErrorMessage = nil } })) {
             Button("OK") { importErrorMessage = nil }
         } message: {
             Text(importErrorMessage ?? "")
+        }
+        .onAppear { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        // Local monitor: fires for key events targeted at this app's
+        // windows. Returning nil swallows the event; returning it lets it
+        // propagate normally.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            guard mods.contains(.command) else { return event }
+            switch chars {
+            case "z":
+                if mods.contains(.shift) { state.redo() }
+                else                     { state.undo() }
+                return nil
+            case "q":
+                // Cmd-Q only fires while Earshot's popover window is key,
+                // not while another app is focused. First press warns;
+                // subsequent presses quit immediately. We have to use a
+                // UserDefaults flag rather than @State because the
+                // confirmation has to persist across runs.
+                if UserDefaults.standard.bool(forKey: "earshot.cmdQAcknowledged") {
+                    NSApp.terminate(nil)
+                } else {
+                    let alert = NSAlert()
+                    alert.messageText = "Quit Earshot?"
+                    alert.informativeText = "Quitting will disable EQ until you reopen the app. Earshot lives in the menubar — closing the popover doesn't quit it."
+                    alert.addButton(withTitle: "Quit")
+                    alert.addButton(withTitle: "Cancel")
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        UserDefaults.standard.set(true, forKey: "earshot.cmdQAcknowledged")
+                        NSApp.terminate(nil)
+                    }
+                }
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor {
+            NSEvent.removeMonitor(m)
+            keyMonitor = nil
         }
     }
 }
@@ -86,59 +144,96 @@ private struct HeaderBar: View {
     @ObservedObject var state: AppState
 
     var body: some View {
-        HStack(spacing: 10) {
+        // Every item gets the same explicit height frame and HStack uses
+        // .center alignment, so the glyph / title / icons / toggle all
+        // share one baseline regardless of their intrinsic sizes.
+        HStack(alignment: .center, spacing: 10) {
+            // Glyph turns accent-blue when bypass is engaged. Previously
+            // a "Bypass" subtitle carried that signal; with the subtitle
+            // removed the glyph itself does the indicating.
             EQGlyph()
-                .stroke(.primary.opacity(0.85), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                .frame(width: 22, height: 14)
+                .stroke(
+                    state.bypassMode
+                        ? AnyShapeStyle(Color.accentColor)
+                        : AnyShapeStyle(.primary.opacity(0.85)),
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                .frame(width: 22, height: 22)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Earshot").font(.system(size: 14, weight: .semibold))
-                if state.passthroughMode {
-                    Text("Speakers passthrough")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                } else {
-                    Text(state.eqEnabled ? "EQ on" : "Off")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+            // Just the title - the on/off/bypass state is already conveyed
+            // by the toggle position and the bypass icon's accent fill,
+            // so a duplicate subtitle was redundant.
+            Text("Earshot")
+                .font(.system(size: 13, weight: .semibold))
+                .fixedSize()
+
+            // Inline output picker, flexes to absorb the slack between
+            // the title and the right-hand controls so the header doesn't
+            // leave a big gap before the bypass button. Borderless menu
+            // keeps it visually quiet; the headphones icon makes the role
+            // explicit without needing an "OUTPUT" label above it.
+            HStack(alignment: .center, spacing: 1) {
+                Image(systemName: "headphones")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 22)
+                Picker("", selection: Binding(
+                    get: { state.outputDeviceUID ?? "" },
+                    set: { state.setOutputDevice(uid: $0) })) {
+                    ForEach(state.availableOutputs) { d in
+                        Text(d.name).tag(d.uid)
+                    }
+                    if !state.availableOutputs.contains(where: { $0.uid == state.outputDeviceUID }) {
+                        Text("(none)").tag("")
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .buttonStyle(.borderless)
+                .layoutPriority(1)
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .help("Output device - where Earshot sends the EQ'd audio")
 
             if state.isApplyingRouting {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
             }
 
-            // Bypass toggle: in passthrough → return to EQ mode; otherwise
+            // Bypass toggle: in bypass mode → return to EQ mode; otherwise
             // route audio to built-in speakers with no EQ.
             Button {
-                if state.passthroughMode {
-                    state.exitPassthrough()
+                if state.bypassMode {
+                    state.exitBypass()
                 } else {
-                    state.enableSpeakersPassthrough()
+                    state.enableBypass()
                 }
             } label: {
-                Image(systemName: "speaker.wave.2.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(state.passthroughMode ? Color.accentColor : .secondary)
+                // hifispeaker is a literal speaker-box glyph - reads as
+                // "speakers" at a glance where speaker.wave.2 looked like
+                // a volume/mute icon and was ambiguous about its function.
+                Image(systemName: "hifispeaker.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(state.bypassMode ? Color.accentColor : .secondary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(state.passthroughMode
+            .help(state.bypassMode
                   ? "Bypass on - click to return to EQ"
                   : "Bypass: route audio to built-in speakers with no EQ")
 
             // Toggle is "Earshot active" - shows ON for either EQ or
-            // passthrough mode, since both have the engine running. Off
-            // fully disables Earshot.
+            // bypass mode, since both have the engine running. Off fully
+            // disables Earshot. Explicit `.tint(.accentColor)` because
+            // the default macOS switch tint was intermittently rendering
+            // grey when other parts of the view rebuilt during a state
+            // transition - hard-binding the on-color keeps it reliable.
             Toggle("", isOn: Binding(
-                get: { state.eqEnabled || state.passthroughMode },
+                get: { state.eqEnabled || state.bypassMode },
                 set: { state.setEQEnabled($0) }))
             .toggleStyle(.switch)
+            .tint(.accentColor)
             .labelsHidden()
-            .help(state.eqEnabled || state.passthroughMode ? "On (turn off to fully disable Earshot)" : "Off (Earshot is not intercepting audio)")
+            .help(state.eqEnabled || state.bypassMode ? "On (turn off to fully disable Earshot)" : "Off (Earshot is not intercepting audio)")
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -261,13 +356,85 @@ private struct OutputPicker: View {
 
 private struct HeroCurveView: View {
     @ObservedObject var state: AppState
+    @Binding var isExpanded: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            EQCurveView(bands: state.workingBands, preamp: state.workingPreamp)
-                .frame(height: 132)
+            ZStack(alignment: .topTrailing) {
+                // Compact view: curve only, no dots, no readout. Keeps the
+                // menubar glance read uncluttered. The chip on the right is
+                // the single entry point into the editor.
+                EQCurveView(state: state, interactive: false)
+                    .frame(height: 132)
+
+                EditBandsChip {
+                    withAnimation(.smooth(duration: 0.18)) { isExpanded = true }
+                }
+                .padding(8)
+            }
             FrequencyAxis()
         }
+    }
+}
+
+/// Curve renderer. Uses SwiftUI's `Canvas` so the path is drawn directly at
+/// native display resolution (avoids `drawingGroup`'s bitmap pixelation on
+/// Retina) and the GPU handles the per-frame stroke/fill in one pass —
+/// faster than two separate `Path` views for drag-time redraws.
+private struct CurveLayer: View {
+    let bands: [EQBand]
+    let preamp: Float
+
+    var body: some View {
+        Canvas { ctx, size in
+            let pts = EQCurveView.curvePoints(
+                bands: bands, preamp: preamp,
+                width: size.width, height: size.height)
+            guard let first = pts.first else { return }
+
+            var fill = Path()
+            fill.move(to: CGPoint(x: first.x, y: size.height))
+            for pt in pts { fill.addLine(to: pt) }
+            fill.addLine(to: CGPoint(x: size.width, y: size.height))
+            fill.closeSubpath()
+            ctx.fill(fill, with: .linearGradient(
+                Gradient(colors: [Color.accentColor.opacity(0.22),
+                                  Color.accentColor.opacity(0.0)]),
+                startPoint: CGPoint(x: size.width / 2, y: 0),
+                endPoint: CGPoint(x: size.width / 2, y: size.height)))
+
+            var stroke = Path()
+            stroke.move(to: first)
+            for pt in pts.dropFirst() { stroke.addLine(to: pt) }
+            ctx.stroke(stroke, with: .linearGradient(
+                Gradient(colors: [Color.accentColor.opacity(0.95), Color.accentColor]),
+                startPoint: CGPoint(x: 0, y: size.height / 2),
+                endPoint: CGPoint(x: size.width, y: size.height / 2)),
+                style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct EditBandsChip: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Label("Edit bands", systemImage: "slider.horizontal.3")
+        }
+        .controlSize(.small)
+        .help("Open the band editor")
+    }
+}
+
+private struct CollapseChip: View {
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Label("Done", systemImage: "chevron.up")
+        }
+        .controlSize(.small)
+        .help("Hide the band editor")
     }
 }
 
@@ -275,11 +442,18 @@ private struct HeroCurveView: View {
 
 private struct EQEditor: View {
     @ObservedObject var state: AppState
+    @Binding var isExpanded: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            EQCurveView(bands: state.workingBands, preamp: state.workingPreamp)
-                .frame(height: 132)
+            ZStack(alignment: .topTrailing) {
+                EQCurveView(state: state, interactive: true)
+                    .frame(height: 132)
+                CollapseChip {
+                    withAnimation(.smooth(duration: 0.18)) { isExpanded = false }
+                }
+                .padding(8)
+            }
             FrequencyAxis()
             BandList(state: state)
             HStack(spacing: 8) {
@@ -333,15 +507,6 @@ private struct BandRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Button {
-                state.toggleSolo(band.id)
-            } label: {
-                Image(systemName: state.soloedBandID == band.id ? "s.square.fill" : "s.square")
-                    .foregroundStyle(state.soloedBandID == band.id ? Color.accentColor : Color.secondary.opacity(0.7))
-            }
-            .buttonStyle(.plain)
-            .help("Solo this band")
-
             Toggle("", isOn: Binding(
                 get: { !band.bypass },
                 set: { v in state.updateBand(id: band.id) { $0.bypass = !v } }))
@@ -349,6 +514,9 @@ private struct BandRow: View {
             .controlSize(.mini)
             .labelsHidden()
 
+            // Picker absorbs the slack so the row has no trailing dead
+            // space. Filter-type names vary in length anyway, so giving
+            // the dropdown the leftover width is the natural fit.
             Picker("", selection: Binding(
                 get: { band.type },
                 set: { v in state.updateBand(id: band.id) { $0.type = v } })) {
@@ -357,7 +525,7 @@ private struct BandRow: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 100)
+            .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
             .controlSize(.small)
 
             stepperBox(label: "Hz", value: band.frequency,
@@ -369,7 +537,7 @@ private struct BandRow: View {
                        commit: { v in state.updateBand(id: band.id) {
                            $0.frequency = max(20, min(22000, v))
                        }},
-                       width: 70)
+                       width: 80)
 
             stepperBox(label: "dB", value: band.gain,
                        format: { String(format: "%+0.1f", Double($0)) },
@@ -379,7 +547,7 @@ private struct BandRow: View {
                        commit: { v in state.updateBand(id: band.id) {
                            $0.gain = max(-24, min(24, v))
                        }},
-                       width: 60,
+                       width: 68,
                        enabled: band.type.usesGain)
 
             stepperBox(label: "Q", value: band.q,
@@ -388,10 +556,8 @@ private struct BandRow: View {
                        commit: { v in state.updateBand(id: band.id) {
                            $0.q = max(0.1, min(50, v))
                        }},
-                       width: 60,
+                       width: 64,
                        enabled: band.type.usesQ)
-
-            Spacer(minLength: 0)
 
             Button {
                 state.removeBand(id: band.id)
@@ -448,6 +614,71 @@ private struct BandRow: View {
 
 // MARK: - Preamp + meters row
 
+private struct PreampStepper: View {
+    @ObservedObject var state: AppState
+
+    var body: some View {
+        let enabled = !state.autoPreampEnabled
+        // The original chevron glyphs were only ~8pt tall so their hit
+        // area was a thin slice that the user had to aim at precisely.
+        // Each chevron button is now a fixed-height stripe spanning the
+        // full pill width, with .contentShape(Rectangle()) so the whole
+        // stripe is clickable instead of just the glyph pixels.
+        VStack(spacing: 0) {
+            chevron("chevron.up") {
+                state.recordUndoSnapshot()
+                state.setPreamp(min(12, state.workingPreamp + 0.1))
+            }
+
+            Text(String(format: "%+0.1f dB", Double(state.workingPreamp)))
+                .monospacedDigit()
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 1)
+
+            chevron("chevron.down") {
+                state.recordUndoSnapshot()
+                state.setPreamp(max(-24, state.workingPreamp - 0.1))
+            }
+        }
+        .frame(width: 60)
+        .background(RoundedRectangle(cornerRadius: 5).fill(.quinary))
+        .opacity(enabled ? 1 : 0.45)
+        .disabled(!enabled)
+        .help("Preamp gain - adjusts overall level before EQ.")
+    }
+
+    @ViewBuilder
+    private func chevron(_ systemName: String, _ action: @escaping () -> Void) -> some View {
+        ChevronButton(systemName: systemName, action: action)
+    }
+}
+
+/// Stepper chevron. Adds a subtle background highlight on hover so it
+/// reads as a discrete button instead of a free-floating arrow glyph.
+private struct ChevronButton: View {
+    let systemName: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 14)
+                .background(hovering ? Color.primary.opacity(0.08)
+                                     : Color.clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.08), value: hovering)
+    }
+}
+
 private struct PreampRow: View {
     @ObservedObject var state: AppState
 
@@ -460,29 +691,19 @@ private struct PreampRow: View {
             Slider(value: Binding(
                 get: { Double(state.workingPreamp) },
                 set: { state.setPreamp(Float($0)) }),
-                   in: -24...12)
+                   in: -24...12,
+                   onEditingChanged: { editing in
+                       // Snapshot once at drag start so a single undo
+                       // reverts the whole slider gesture.
+                       if editing { state.recordUndoSnapshot() }
+                   })
                 .disabled(state.autoPreampEnabled)
                 .opacity(state.autoPreampEnabled ? 0.55 : 1.0)
-            HStack(spacing: 2) {
-                Text(String(format: "%+0.1f dB", Double(state.workingPreamp)))
-                    .monospacedDigit()
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 56, alignment: .trailing)
-                VStack(spacing: 0) {
-                    Button {
-                        state.setPreamp(min(12, state.workingPreamp + 0.1))
-                    } label: { Image(systemName: "chevron.up").imageScale(.small) }
-                    Button {
-                        state.setPreamp(max(-24, state.workingPreamp - 0.1))
-                    } label: { Image(systemName: "chevron.down").imageScale(.small) }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .frame(width: 12)
-                .disabled(state.autoPreampEnabled)
-                .opacity(state.autoPreampEnabled ? 0.5 : 1.0)
-            }
+            // dB readout with the +/- chevrons stacked above and below it,
+            // centered on the value. Reads as a single unit instead of a
+            // "value + dropdown chevron" combo which is what the inline
+            // version looked like.
+            PreampStepper(state: state)
             Toggle(isOn: Binding(
                 get: { state.autoPreampEnabled },
                 set: { state.setAutoPreampEnabled($0) })) {
@@ -502,33 +723,45 @@ private struct PreampRow: View {
 
 private struct ToolbarRow: View {
     @ObservedObject var state: AppState
-    @Binding var isExpanded: Bool
     @Binding var showingSaveSheet: Bool
     @Binding var savePresetName: String
     @Binding var showingHeadphoneSearch: Bool
+    @Binding var showingRoomCorrection: Bool
     @Binding var importErrorMessage: String?
 
     var body: some View {
         HStack(spacing: 4) {
-            ToolbarButton(systemImage: "magnifyingglass", help: "Find your headphone") {
+            // Icon-only buttons were ambiguous; matching the "Save" button's
+            // icon-plus-label pattern keeps each entry point self-explanatory.
+            Button {
                 showingHeadphoneSearch = true
+            } label: {
+                Label("Find headphone…", systemImage: "headphones")
             }
-            ToolbarButton(systemImage: "square.and.arrow.down", help: "Import a ParametricEQ.txt") {
+            .controlSize(.small)
+            .help("Search the bundled AutoEQ headphone catalog")
+
+            Button {
+                showingRoomCorrection = true
+            } label: {
+                Label("Room correction…", systemImage: "waveform.path.ecg")
+            }
+            .controlSize(.small)
+            .help("Fit a corrective EQ to a measured frequency response")
+
+            Button {
                 importAutoEQ()
+            } label: {
+                Label("Import…", systemImage: "square.and.arrow.down")
             }
-            if let id = state.loadedPresetID,
-               let p = state.presets.first(where: { $0.id == id }) {
-                ToolbarButton(systemImage: "square.and.arrow.up", help: "Export “\(p.name)” as ParametricEQ.txt") {
-                    exportPresetToFile(p)
-                }
-            }
+            .controlSize(.small)
+            .help("Load a ParametricEQ.txt file from disk")
+
+            // Export moved to the per-preset menu (... > Export...) so
+            // any preset can be exported, not just the currently loaded
+            // one, and so this row stops re-flowing when the loaded
+            // preset state changes.
             Spacer()
-            if let id = state.loadedPresetID,
-               let p = state.presets.first(where: { $0.id == id }) {
-                Button("Update “\(p.name)”") { state.updatePreset(id) }
-                    .controlSize(.small)
-                    .buttonStyle(.borderless)
-            }
             Button {
                 savePresetName = ""
                 showingSaveSheet = true
@@ -536,11 +769,6 @@ private struct ToolbarRow: View {
                 Label("Save", systemImage: "plus")
             }
             .controlSize(.small)
-
-            ToolbarButton(systemImage: isExpanded ? "chevron.up" : "slider.horizontal.3",
-                          help: isExpanded ? "Hide bands" : "Edit bands") {
-                withAnimation(.smooth(duration: 0.18)) { isExpanded.toggle() }
-            }
         }
     }
 
@@ -548,7 +776,7 @@ private struct ToolbarRow: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.plainText]
         panel.allowsMultipleSelection = false
-        panel.message = "Select a ParametricEQ.txt file (AutoEQ / oratory1990 format)."
+        panel.message = "Select a ParametricEQ.txt file (AutoEQ format)."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
             importErrorMessage = "Couldn't read the file."
@@ -562,18 +790,23 @@ private struct ToolbarRow: View {
         }
     }
 
-    private func exportPresetToFile(_ preset: EQPreset) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.plainText]
-        panel.nameFieldStringValue = "\(preset.name) ParametricEQ.txt"
-        panel.message = "Save as AutoEQ ParametricEQ format."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let text = state.exportAutoEQ(preset: preset)
-        do {
-            try text.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            importErrorMessage = "Couldn't write the file: \(error.localizedDescription)"
-        }
+}
+
+/// Shared preset export helper. Used by the per-preset menu in PresetRow.
+/// On error returns the message string; on success returns nil.
+@MainActor
+private func exportPresetToFile(_ preset: EQPreset, state: AppState) -> String? {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [.plainText]
+    panel.nameFieldStringValue = "\(preset.name) ParametricEQ.txt"
+    panel.message = "Save as AutoEQ ParametricEQ format."
+    guard panel.runModal() == .OK, let url = panel.url else { return nil }
+    let text = state.exportAutoEQ(preset: preset)
+    do {
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        return nil
+    } catch {
+        return "Couldn't write the file: \(error.localizedDescription)"
     }
 }
 
@@ -630,22 +863,13 @@ private struct PresetRow: View {
     var body: some View {
         let isLoaded = state.loadedPresetID == preset.id
         HStack(spacing: 10) {
-            Rectangle()
-                .fill(isLoaded ? Color.accentColor : Color.clear)
-                .frame(width: 2)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(preset.name)
-                    .font(.system(size: 12, weight: isLoaded ? .semibold : .regular))
-                if let outUID = preset.outputDeviceUID,
-                   let dev = state.availableOutputs.first(where: { $0.uid == outUID }) {
-                    Text(dev.name).font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-            }
+            Text(preset.name)
+                .font(.system(size: 12, weight: isLoaded ? .semibold : .regular))
             Spacer()
             Menu {
-                Button("Load") { state.loadPreset(preset.id) }
                 Button("Update with current EQ") { state.updatePreset(preset.id) }
                 Button("Rename…") { renameTarget = preset }
+                Button("Export…") { _ = exportPresetToFile(preset, state: state) }
                 Divider()
                 Button("Delete", role: .destructive) { state.deletePreset(preset.id) }
             } label: {
@@ -658,30 +882,46 @@ private struct PresetRow: View {
             .menuIndicator(.hidden)
             .frame(width: 22)
         }
-        .padding(.vertical, 7)
+        // Content text aligns at x=16 to match the EQ ON / EQ OFF headings
+        // and OUTPUT block above. The loaded-state indicator is an overlay
+        // pinned to the popover's left edge so it still reads as a flush
+        // accent strip without shifting the text.
+        .padding(.leading, 16)
         .padding(.trailing, 12)
+        .padding(.vertical, 7)
         .contentShape(Rectangle())
         .background(isLoaded ? Color.accentColor.opacity(0.06) : Color.clear)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(isLoaded ? Color.accentColor : Color.clear)
+                .frame(width: 2)
+        }
         .onTapGesture { state.loadPreset(preset.id) }
     }
 }
 
 // MARK: - Footer
 
-private struct FooterBar: View {
+/// Inline error strip that appears at the bottom of the popover only
+/// when there's actually an error to surface. Replaces the old FooterBar
+/// (which was permanent chrome just to host a "Quit" menu - quit is now
+/// reachable via right-click on the menubar icon and Cmd-Q while the
+/// popover is focused).
+private struct ErrorStrip: View {
     @ObservedObject var state: AppState
 
     var body: some View {
-        HStack(spacing: 6) {
-            if let err = state.lastError {
+        if let err = state.lastError {
+            HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.orange)
                     .font(.system(size: 11))
                 Text(err)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .truncationMode(.middle)
+                Spacer()
                 Button {
                     state.lastError = nil
                 } label: {
@@ -690,30 +930,35 @@ private struct FooterBar: View {
                 }
                 .buttonStyle(.plain)
             }
-            Spacer()
-            Menu {
-                Button("Quit Earshot") { NSApp.terminate(nil) }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 22)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.quaternary.opacity(0.4))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.4))
     }
 }
 
 // MARK: - EQ curve drawing
 
 private struct EQCurveView: View {
-    let bands: [EQBand]
-    let preamp: Float
+    @ObservedObject var state: AppState
+    /// When false, the curve renders as a glance read: no dots, no
+    /// gestures, no readout. Used in the compact hero view so the menubar
+    /// popover stays uncluttered.
+    var interactive: Bool = true
+
+    @State private var hoveredBandID: UUID? = nil
+    @State private var draggingBandID: UUID? = nil
+    /// Captured at drag start so a single drag translation can be applied to a
+    /// stable origin, instead of compounding tiny per-event mutations into
+    /// rounding drift.
+    @State private var dragAnchor: DragAnchor? = nil
+
+    private struct DragAnchor {
+        let bandID: UUID
+        let startFrequency: Float
+        let startGain: Float
+        let startPoint: CGPoint
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -723,8 +968,8 @@ private struct EQCurveView: View {
                         colors: [Color.accentColor.opacity(0.08), Color.accentColor.opacity(0.02)],
                         startPoint: .top, endPoint: .bottom))
 
-                ForEach(gridLines, id: \.self) { db in
-                    let y = yFor(db: Float(db), height: geo.size.height)
+                ForEach(EQCurveView.gridLines, id: \.self) { db in
+                    let y = EQCurveView.yFor(db: Float(db), height: geo.size.height)
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: y))
                         p.addLine(to: CGPoint(x: geo.size.width, y: y))
@@ -733,62 +978,336 @@ private struct EQCurveView: View {
                             style: StrokeStyle(lineWidth: 0.5, dash: db == 0 ? [] : [2, 4]))
                 }
 
-                let curvePoints = curvePoints(width: geo.size.width, height: geo.size.height)
-                Path { p in
-                    guard let first = curvePoints.first else { return }
-                    p.move(to: CGPoint(x: first.x, y: geo.size.height))
-                    for pt in curvePoints { p.addLine(to: pt) }
-                    p.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height))
-                    p.closeSubpath()
-                }
-                .fill(LinearGradient(
-                    colors: [Color.accentColor.opacity(0.22), Color.accentColor.opacity(0.0)],
-                    startPoint: .top, endPoint: .bottom))
+                // The curve is recomputed on every band change. Rasterizing
+                // it to a single Metal layer (drawingGroup) keeps the cost
+                // of drag-time redraws bounded — without it, both the fill
+                // and stroke paths re-tessellate on every gesture event.
+                CurveLayer(
+                    bands: state.workingBands,
+                    preamp: state.workingPreamp)
 
-                Path { p in
-                    guard let first = curvePoints.first else { return }
-                    p.move(to: first)
-                    for pt in curvePoints.dropFirst() { p.addLine(to: pt) }
+                // Interactive dots only when the parent view enables it.
+                // Drawn above the curve so the user can grab a band even
+                // where two bands cross. Hovered/dragged dots float up via
+                // zIndex (not view reordering) so the active DragGesture
+                // isn't torn down mid-drag.
+                if interactive {
+                    let bands = state.workingBands
+
+                    // Vertical guide through the active dot — strongest
+                    // possible "this is the one you're touching" signal.
+                    if let id = draggingBandID ?? hoveredBandID,
+                       let band = bands.first(where: { $0.id == id }) {
+                        let x = CGFloat(EQCurveView.tFor(freq: band.frequency)) * geo.size.width
+                        Path { p in
+                            p.move(to: CGPoint(x: x, y: 0))
+                            p.addLine(to: CGPoint(x: x, y: geo.size.height))
+                        }
+                        .stroke(Color.accentColor.opacity(0.35),
+                                style: StrokeStyle(lineWidth: 0.8, dash: [3, 3]))
+                        .allowsHitTesting(false)
+                    }
+
+                    // Dots are visual only. The interaction layer above
+                    // catches all events so there's no chance of a missed
+                    // SwiftUI .onHover exit leaving the cursor as a hand
+                    // outside a dot's hit area.
+                    ForEach(bands) { band in
+                        bandDot(band: band, viewSize: geo.size)
+                            .zIndex(band.id == draggingBandID ? 2
+                                    : (band.id == hoveredBandID ? 1 : 0))
+                            .allowsHitTesting(false)
+                    }
+
+                    // Single interaction layer: every mouse-move event
+                    // updates cursor + highlight via .onContinuousHover,
+                    // which fires continuously rather than only at
+                    // enter/exit (the unreliable .onHover that was
+                    // dropping exits). A strict 8pt-radius test means the
+                    // hand cursor and highlight appear ONLY when the
+                    // pointer is literally within a dot's 16pt-diameter
+                    // hit zone — identical area to the click target.
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let p):
+                                let hit = EQCurveView.strictHit(
+                                    at: p, bands: bands,
+                                    viewSize: geo.size, radius: 8)
+                                hoveredBandID = hit?.id
+                                if hit != nil { NSCursor.pointingHand.set() }
+                                else          { NSCursor.arrow.set() }
+                            case .ended:
+                                hoveredBandID = nil
+                                NSCursor.arrow.set()
+                            }
+                        }
+                        .gesture(layerDragGesture(bands: bands, viewSize: geo.size))
+                        .contextMenu { dotContextMenu(bands: bands) }
+                        .onTapGesture(count: 2) {
+                            if let id = hoveredBandID,
+                               let b = bands.first(where: { $0.id == id }),
+                               b.type.usesGain {
+                                state.updateBand(id: id) { $0.gain = 0 }
+                            }
+                        }
+
+                    // Readout shows on hover OR drag - same trigger as the
+                    // hand cursor (both fire from .onContinuousHover above,
+                    // which is reliable, so the stale-text problem from
+                    // earlier per-dot .onHover isn't a concern here).
+                    if let id = draggingBandID ?? hoveredBandID,
+                       let band = bands.first(where: { $0.id == id }) {
+                        tooltip(for: band)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                                   alignment: .topLeading)
+                            .padding(6)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
-                .stroke(LinearGradient(
-                    colors: [Color.accentColor.opacity(0.95), Color.accentColor],
-                    startPoint: .leading, endPoint: .trailing),
-                    style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+            }
+            // No implicit ZStack-wide animations: with a drag changing
+            // band position 60-120Hz, those animations would try to
+            // interpolate dot positions on every event and fight the
+            // gesture. Hover affordances are animated locally on the dot.
+        }
+    }
+
+    // MARK: Dot
+
+    @ViewBuilder
+    private func bandDot(band: EQBand, viewSize: CGSize) -> some View {
+        let pt = EQCurveView.pointForBand(band, viewSize: viewSize)
+        let isHovered = hoveredBandID == band.id
+        let isDragging = draggingBandID == band.id
+        let isActive = isHovered || isDragging
+
+        // Subtle: dot grows slightly and its outline brightens. The dashed
+        // vertical guide line on the parent ZStack is what spatially
+        // identifies the active dot; the dot itself stays understated.
+        let dotSize: CGFloat = isDragging ? 13 : (isActive ? 11 : 9)
+        let dotFill: Color = band.bypass
+            ? Color.secondary.opacity(0.55)
+            : Color.accentColor
+        let outlineOpacity: Double = isActive ? 1.0 : 0.85
+        let outlineWidth: CGFloat = isActive ? 1.4 : 1.0
+
+        let allFull = state.workingBands.count >= EQEngine.maxBands
+
+        if allFull {
+            Image(systemName: "hand.thumbsup.fill")
+                .font(.system(size: dotSize * 1.6, weight: .semibold))
+                .foregroundStyle(dotFill)
+                .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+                .opacity(band.bypass ? 0.55 : 1)
+                .position(pt)
+        } else {
+            Circle()
+                .fill(dotFill)
+                .overlay(
+                    Circle().strokeBorder(Color.white.opacity(outlineOpacity),
+                                          lineWidth: outlineWidth)
+                )
+                .frame(width: dotSize, height: dotSize)
+                .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+                .opacity(band.bypass ? 0.55 : 1)
+                .position(pt)
+        }
+    }
+
+    /// Right-click menu shared by every dot. Operates on the band the
+    /// interaction layer's hover tracker last identified, so right-click
+    /// over a specific dot opens its menu — and a right-click over empty
+    /// space opens an empty menu (effectively a no-op).
+    @ViewBuilder
+    private func dotContextMenu(bands: [EQBand]) -> some View {
+        if let id = hoveredBandID, let band = bands.first(where: { $0.id == id }) {
+            Button {
+                state.updateBand(id: band.id) { $0.bypass.toggle() }
+            } label: {
+                if band.bypass { Label("Bypass band", systemImage: "checkmark") }
+                else           { Text("Bypass band") }
+            }
+            Button {
+                state.toggleSolo(band.id)
+            } label: {
+                if state.soloedBandID == band.id {
+                    Label("Solo band", systemImage: "checkmark")
+                } else {
+                    Text("Solo band")
+                }
+            }
+            Button("Reset gain") {
+                state.updateBand(id: band.id) { $0.gain = 0 }
+            }
+            Divider()
+            Button("Remove band", role: .destructive) {
+                state.removeBand(id: band.id)
             }
         }
     }
 
-    private let gridLines: [Int] = [-12, -6, 0, 6, 12]
-    private let fMin: Float = 20
-    private let fMax: Float = 20000
-    private let dbRange: Float = 18
+    /// Drag handler attached to the interaction layer. On the first event,
+    /// uses the press location to find which dot was grabbed (strict 8pt
+    /// hit) and captures the anchor; later events apply the translation.
+    /// A press not on any dot is a no-op — no anchor is captured so
+    /// subsequent .onChanged events early-return.
+    private func layerDragGesture(bands: [EQBand], viewSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if dragAnchor == nil {
+                    guard let band = EQCurveView.strictHit(
+                        at: value.startLocation, bands: bands,
+                        viewSize: viewSize, radius: 8) else { return }
+                    state.recordUndoSnapshot()
+                    dragAnchor = DragAnchor(
+                        bandID: band.id,
+                        startFrequency: band.frequency,
+                        startGain: band.gain,
+                        startPoint: EQCurveView.pointForBand(band, viewSize: viewSize))
+                    draggingBandID = band.id
+                    NSCursor.pointingHand.set()
+                }
+                guard let anchor = dragAnchor else { return }
 
-    private func curvePoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
+                let mods = NSEvent.modifierFlags
+                let lockX = mods.contains(.option)
+                let lockY = mods.contains(.shift)
+                let dx = lockX ? 0 : value.translation.width
+                let dy = lockY ? 0 : value.translation.height
+                let newX = min(max(anchor.startPoint.x + dx, 0), viewSize.width)
+                let newY = min(max(anchor.startPoint.y + dy, 0), viewSize.height)
+                let t = viewSize.width > 0 ? Float(newX / viewSize.width) : 0
+                let newFreq = EQCurveView.freqAt(t: t)
+                state.updateBandTransient(id: anchor.bandID) { b in
+                    b.frequency = max(20, min(22000, newFreq))
+                    if b.type.usesGain && !lockY {
+                        let g = EQCurveView.dbFor(y: newY, height: viewSize.height)
+                        b.gain = max(-EQCurveView.dbRange,
+                                     min(EQCurveView.dbRange, g))
+                    }
+                }
+            }
+            .onEnded { _ in
+                if dragAnchor != nil { state.commitBandEdits() }
+                dragAnchor = nil
+                draggingBandID = nil
+            }
+    }
+
+    /// Find the band whose dot strictly contains `point`, where "contains"
+    /// is `distance <= radius`. Returns nil when the cursor isn't on any
+    /// dot. Used identically for both hover-cursor decisions and drag
+    /// dispatch so the hand cursor and the click target are the same
+    /// region by construction.
+    fileprivate static func strictHit(at point: CGPoint, bands: [EQBand],
+                                      viewSize: CGSize, radius: CGFloat) -> EQBand? {
+        let r2 = radius * radius
+        var bestID: UUID? = nil
+        var bestSq = r2
+        for b in bands {
+            let p = EQCurveView.pointForBand(b, viewSize: viewSize)
+            let dx = p.x - point.x
+            let dy = p.y - point.y
+            let sq = dx * dx + dy * dy
+            if sq <= bestSq { bestSq = sq; bestID = b.id }
+        }
+        return bestID.flatMap { id in bands.first { $0.id == id } }
+    }
+
+    // MARK: Tooltip
+
+    @ViewBuilder
+    private func tooltip(for band: EQBand) -> some View {
+        let parts: [String] = {
+            var out: [String] = [Self.freqLabel(band.frequency)]
+            if band.type.usesGain {
+                out.append(String(format: "%+.1f dB", Double(band.gain)))
+            }
+            if band.type.usesQ {
+                out.append(String(format: "Q %.2f", Double(band.q)))
+            }
+            return out
+        }()
+        Text(parts.joined(separator: "  ·  "))
+            .font(.system(size: 10, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(.primary.opacity(0.85))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
+            )
+    }
+
+    // MARK: Coordinate math (static so call sites don't need an instance)
+
+    fileprivate static let gridLines: [Int] = [-12, -6, 0, 6, 12]
+    fileprivate static let fMin: Float = 20
+    fileprivate static let fMax: Float = 20000
+    fileprivate static let dbRange: Float = 18
+
+    fileprivate static func freqAt(t: Float) -> Float {
+        let logMin = log10f(fMin)
+        let logMax = log10f(fMax)
+        return powf(10, logMin + max(0, min(1, t)) * (logMax - logMin))
+    }
+
+    fileprivate static func tFor(freq: Float) -> Float {
+        let logMin = log10f(fMin)
+        let logMax = log10f(fMax)
+        let lf = log10f(max(fMin, min(fMax, freq)))
+        return (lf - logMin) / (logMax - logMin)
+    }
+
+    fileprivate static func yFor(db: Float, height: CGFloat) -> CGFloat {
+        let clamped = max(-dbRange, min(dbRange, db))
+        let n = (dbRange - clamped) / (2 * dbRange)
+        return CGFloat(n) * height
+    }
+
+    fileprivate static func dbFor(y: CGFloat, height: CGFloat) -> Float {
+        guard height > 0 else { return 0 }
+        let n = Float(y / height)
+        return dbRange - n * 2 * dbRange
+    }
+
+    /// The on-curve y coordinate for a band's dot. For gain-bearing filters
+    /// this is just the band's gain; for pass filters (no gain parameter)
+    /// the dot rides on the 0 dB line so it stays a sensible grab target.
+    fileprivate static func pointForBand(_ b: EQBand, viewSize: CGSize) -> CGPoint {
+        let x = CGFloat(tFor(freq: b.frequency)) * viewSize.width
+        let g = b.type.usesGain ? b.gain : 0
+        let y = yFor(db: g, height: viewSize.height)
+        return CGPoint(x: x, y: y)
+    }
+
+    fileprivate static func curvePoints(bands: [EQBand], preamp: Float,
+                                        width: CGFloat, height: CGFloat) -> [CGPoint] {
+        // 256 samples across a ~450pt chart keeps the curve crisp at 2x
+        // Retina. Canvas rendering means the transcendental work isn't the
+        // bottleneck — implicit animations during drag were.
         let count = 256
         var pts: [CGPoint] = []
         pts.reserveCapacity(count + 1)
         for i in 0...count {
             let t = Float(i) / Float(count)
             let f = freqAt(t: t)
-            let db = totalGainDB(at: f) + preamp
+            let db = totalGainDB(bands: bands, at: f) + preamp
             pts.append(CGPoint(x: CGFloat(t) * width, y: yFor(db: db, height: height)))
         }
         return pts
     }
 
-    private func freqAt(t: Float) -> Float {
-        let logMin = log10f(fMin)
-        let logMax = log10f(fMax)
-        return powf(10, logMin + t * (logMax - logMin))
-    }
-
-    private func yFor(db: Float, height: CGFloat) -> CGFloat {
-        let clamped = max(-dbRange, min(dbRange, db))
-        let n = (dbRange - clamped) / (2 * dbRange)
-        return CGFloat(n) * height
-    }
-
-    private func totalGainDB(at f: Float) -> Float {
+    fileprivate static func totalGainDB(bands: [EQBand], at f: Float) -> Float {
         var total: Float = 0
         for b in bands where !b.bypass {
             total += bandResponseDB(b, at: f)
@@ -796,7 +1315,7 @@ private struct EQCurveView: View {
         return total
     }
 
-    private func bandResponseDB(_ b: EQBand, at f: Float) -> Float {
+    fileprivate static func bandResponseDB(_ b: EQBand, at f: Float) -> Float {
         let fc = b.frequency
         switch b.type {
         case .parametric, .resonantLowShelf, .resonantHighShelf, .bandPass, .bandStop:
@@ -820,6 +1339,11 @@ private struct EQCurveView: View {
             let lf = log2f(f / fc)
             return lf < 0 ? lf * 6 : 0
         }
+    }
+
+    fileprivate static func freqLabel(_ f: Float) -> String {
+        if f >= 1000 { return String(format: "%.2f kHz", Double(f) / 1000) }
+        return String(format: "%.0f Hz", Double(f))
     }
 }
 
@@ -1015,19 +1539,17 @@ private struct HeadphoneSearchSheet: View {
             HStack {
                 Text("Find a preset").font(.headline)
                 Spacer()
-                Button {
+                // Plain-text labels on both so they're identical height -
+                // a `Label` with an SF Symbol made Refresh taller than the
+                // text-only Done button and the icon never aligned cleanly
+                // with the text baseline either.
+                Button("Refresh catalog") {
                     Task { await state.refreshHeadphoneIndex() }
-                } label: {
-                    Label("Refresh catalog", systemImage: "arrow.clockwise")
                 }
-                .controlSize(.small)
                 .disabled(state.headphoneFetchInProgress)
-                Button("Done", action: onClose).keyboardShortcut(.cancelAction)
+                Button("Done", action: onClose)
+                    .keyboardShortcut(.cancelAction)
             }
-            Text("Searches your saved presets and the AutoEq oratory1990 catalog (\(state.headphoneIndex.count) headphones). Refresh re-fetches the live catalog from GitHub.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Sennheiser HD 600, AirPods Max, my custom preset…", text: $query)
@@ -1035,33 +1557,55 @@ private struct HeadphoneSearchSheet: View {
             }
             .padding(8)
             .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    let userMatches = matchingUserPresets()
-                    if !userMatches.isEmpty {
-                        SectionHeader("Your presets · \(userMatches.count)")
+            // List virtualizes far better than ScrollView+LazyVStack for
+            // ~2000-row catalogs. We also cap the catalog rendering until
+            // a query is typed - dumping all 1961 entries into the view
+            // hierarchy by default was what made initial scroll glitchy
+            // (LazyVStack pre-measures section sizes even when off-screen).
+            List {
+                let userMatches = matchingUserPresets()
+                if !userMatches.isEmpty {
+                    Section("Your presets · \(userMatches.count)") {
                         ForEach(userMatches) { p in
                             UserPresetSearchRow(preset: p, state: state, onClose: onClose)
-                            Divider().opacity(0.4)
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
                         }
                     }
-                    let catalogMatches = state.searchHeadphones(query)
-                    SectionHeader("AutoEq catalog · \(catalogMatches.count)")
-                    if catalogMatches.isEmpty {
-                        Text("No catalog matches. Try Refresh, or check spelling.")
+                }
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    Section("AutoEQ catalog · \(state.headphoneIndex.count)") {
+                        Text("Type a brand or model to search.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
-                            .padding(8)
-                    } else {
-                        ForEach(catalogMatches) { entry in
-                            CatalogSearchRow(entry: entry, state: state, onClose: onClose)
-                            Divider().opacity(0.4)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 12,
+                                                      bottom: 8, trailing: 12))
+                            .listRowSeparator(.hidden)
+                    }
+                } else {
+                    let catalogMatches = state.searchHeadphones(query)
+                    Section("AutoEQ catalog · \(catalogMatches.count)") {
+                        if catalogMatches.isEmpty {
+                            Text("No matches. Try Refresh, or check spelling.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 12,
+                                                          bottom: 8, trailing: 12))
+                                .listRowSeparator(.hidden)
+                        } else {
+                            ForEach(catalogMatches) { entry in
+                                CatalogSearchRow(entry: entry, state: state, onClose: onClose)
+                                    .listRowInsets(EdgeInsets())
+                                    .listRowSeparator(.hidden)
+                            }
                         }
                     }
                 }
             }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
             .frame(height: 320)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.4)))
             if state.headphoneFetchInProgress {
                 HStack {
                     ProgressView().controlSize(.small)

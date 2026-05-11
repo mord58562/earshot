@@ -311,7 +311,7 @@ fails with the offending line, rather than silently dropping bands.
 
 `HeadphoneIndex.swift` keeps a curated index of ~32 popular
 headphones bundled with the app, plus an on-demand refresh from the
-AutoEq GitHub repository. The refresh path:
+AutoEQ GitHub repository. The refresh path:
 
 1. Fetch `api.github.com/.../results/oratory1990` for the list of
    measurement-set subdirectories (`harman_over-ear_2018`, etc.).

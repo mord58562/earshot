@@ -59,7 +59,6 @@ enum AutoEQFormat {
             id: UUID(),
             name: defaultName,
             preampDB: preamp,
-            outputDeviceUID: nil,
             bands: bands)
         return .success(preset)
     }

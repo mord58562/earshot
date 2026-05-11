@@ -94,7 +94,10 @@ final class AppState: ObservableObject {
         observeSystemDeviceChanges()
         wireEngineCallbacks()
         startEngineWatchdog()
-        startMeterTicker()
+        // Meter ticker isn't started here - setPopoverVisible(true)
+        // starts it when the popover is actually on screen. Background
+        // app runtime cost is dominated by the 30 Hz @Published storm,
+        // and there's no point publishing if no one is observing.
         startPersistTicker()
         observeAppLifecycle()
         autoApplyOnLaunchIfPossible()
@@ -177,6 +180,7 @@ final class AppState: ObservableObject {
         inputDeviceUID = s.inputDeviceUID
         outputDeviceUID = s.outputDeviceUID
         eqEnabled = s.eqEnabled
+        autoPreampEnabled = s.autoPreampEnabled
 
         if workingBands.isEmpty, let first = presets.first {
             workingPreamp = first.preampDB
@@ -203,7 +207,8 @@ final class AppState: ObservableObject {
             eqEnabled: eqEnabled,
             workingPreamp: workingPreamp,
             workingBands: workingBands,
-            loadedPresetID: loadedPresetID)
+            loadedPresetID: loadedPresetID,
+            autoPreampEnabled: autoPreampEnabled)
     }
 
     // MARK: - Device enumeration
@@ -304,15 +309,46 @@ final class AppState: ObservableObject {
     private func wireEngineCallbacks() {
         engine.onLevel = { [weak self] l, r in
             guard let self = self else { return }
-            self.leftLevel = l
-            self.rightLevel = r
+            // Auto-preamp still runs while the popover is closed so the
+            // engine keeps trimming clipping in the background. UI-only
+            // state updates are gated behind popoverVisible so a
+            // background app doesn't burn CPU re-publishing @Published
+            // fields 30x/sec when nothing is observing them.
             if self.autoPreampEnabled && self.eqEnabled {
                 self.autoAdjustPreamp(peak: max(l, r))
+            }
+            if self.popoverVisible {
+                self.leftLevel = l
+                self.rightLevel = r
             }
         }
         engine.onConfigurationChange = { [weak self] in
             guard let self = self else { return }
             self.handleConfigChange()
+        }
+    }
+
+    /// Whether the popover is currently on-screen. Drives whether we run
+    /// the 30 Hz meter ticker and publish level updates - both are pure
+    /// UI work that costs CPU even when nothing is observing it.
+    @Published private(set) var popoverVisible: Bool = false
+
+    func setPopoverVisible(_ visible: Bool) {
+        guard popoverVisible != visible else { return }
+        popoverVisible = visible
+        if visible {
+            startMeterTicker()
+        } else {
+            meterTicker?.invalidate()
+            meterTicker = nil
+            // Drop the displayed levels to 0 immediately - when we next
+            // show the popover the meter ticker will catch up from real
+            // input. Leaving them at the last frozen value would briefly
+            // show a stale read on re-open.
+            displayLeft = 0
+            displayRight = 0
+            peakHoldLeft = 0
+            peakHoldRight = 0
         }
     }
 
@@ -516,14 +552,19 @@ final class AppState: ObservableObject {
     // MARK: - User intents (UI calls these)
 
     func setEQEnabled(_ on: Bool) {
-        // Don't short-circuit on `on == eqEnabled`. Passthrough mode runs
-        // the engine with eqEnabled=false, so a user toggling OFF while in
-        // passthrough would otherwise do nothing — they'd be unable to
-        // disable passthrough via the toggle. Source of truth is the
-        // actual engine state, not the eqEnabled flag.
+        // Gate against rapid clicks - the engine isn't thread-safe and
+        // concurrent main-thread stop + background setRouting from a
+        // previous still-in-flight transition is what causes the crash
+        // when the toggle is hammered.
+        if isApplyingRouting { return }
+        // Don't short-circuit on `on == eqEnabled`. Bypass mode runs
+        // the engine with eqEnabled=false, so a user toggling OFF while
+        // in bypass would otherwise do nothing - they'd be unable to
+        // disable bypass via the toggle. Source of truth is the actual
+        // engine state, not the eqEnabled flag.
         let wasRunning = engine.isRunning
         eqEnabled = on
-        passthroughMode = false
+        bypassMode = false
         if on {
             if wasRunning {
                 engine.setBypass(false)
@@ -531,9 +572,30 @@ final class AppState: ObservableObject {
                 startRouting()
             }
         } else {
-            if wasRunning { engine.stop() }
+            if wasRunning {
+                stopEngineOnQueue(reason: "user toggled EQ off")
+            }
         }
         persist()
+    }
+
+    /// Stop the engine on the routing queue so we never have concurrent
+    /// main-thread engine.stop() racing a background engine.setRouting()
+    /// from a prior in-flight transition. Sets `isApplyingRouting` so the
+    /// UI shows a brief spinner and rapid retries are gated out.
+    private func stopEngineOnQueue(reason: String) {
+        isApplyingRouting = true
+        let engine = self.engine
+        routingQueue.async { [weak self] in
+            engine.stop()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self = self else { return }
+                    self.isApplyingRouting = false
+                    Log.write("engine stopped (\(reason))")
+                }
+            }
+        }
     }
 
     /// Speakers passthrough: engine running, EQ DSP bypassed, audio routed
@@ -541,17 +603,27 @@ final class AppState: ObservableObject {
     /// fancy output you have set up and dump everything into laptop speakers
     /// with no EQ - useful when you take headphones off and want a quick
     /// override without touching macOS sound settings.
-    @Published var passthroughMode: Bool = false
+    @Published var bypassMode: Bool = false
 
     /// Output device the user had selected at the moment bypass was
     /// enabled, so we can restore it when bypass is turned off.
     private var preBypassOutputUID: String?
+    /// EQ on/off state at the moment bypass was enabled. exitBypass
+    /// restores this so that bypass-from-off returns to off (was forcing
+    /// EQ on, which both wrong-behaviorised AND crashed because the
+    /// engine had just stopped and immediately had to start again).
+    private var preBypassEQEnabled: Bool = true
 
-    func enableSpeakersPassthrough() {
-        if !passthroughMode {
+    func enableBypass() {
+        // Gate rapid clicks - the crash happened when a second click
+        // arrived mid-routing and tore down the engine while the previous
+        // setRouting was still configuring it on the background queue.
+        if isApplyingRouting { return }
+        if !bypassMode {
             preBypassOutputUID = outputDeviceUID
+            preBypassEQEnabled = eqEnabled
         }
-        passthroughMode = true
+        bypassMode = true
         eqEnabled = false
         // Find a built-in-speaker-ish device. Prefers an exact "MacBook Air
         // Speakers" / "MacBook Pro Speakers" / "Mac mini Speakers" match;
@@ -564,7 +636,7 @@ final class AppState: ObservableObject {
             ?? candidates.first
         if let speaker = speaker {
             outputDeviceUID = speaker.uid
-            Log.write("speakers passthrough: routing to \(speaker.name)")
+            Log.write("bypass: routing to \(speaker.name)")
             startRouting()
         } else {
             lastError = "Couldn't find a built-in speakers device."
@@ -572,12 +644,19 @@ final class AppState: ObservableObject {
         persist()
     }
 
-    /// Leave passthrough and re-enable EQ, restoring whatever output the
-    /// user had selected when bypass was turned on. We have to tear the
-    /// engine down first - just unbypassing leaves it bound to the
-    /// speakers aggregate and the audio IO thread running on stale
-    /// channel maps, which has crashed coreaudio in the past.
-    func exitPassthrough() {
+    /// Leave bypass and restore whatever state Earshot was in when bypass
+    /// was turned on - the output device and the EQ-on/off flag. Previously
+    /// this forced eqEnabled=true unconditionally, which:
+    ///   - wrong-behaviorised bypass-from-EQ-off (came back as EQ on)
+    ///   - crashed in CoreAudio because the engine had just stopped on
+    ///     the routing queue and immediately had to start again with the
+    ///     bypass-routed system default still active.
+    /// Now: stop the engine on the routing queue, restore the prior
+    /// output device, then either restart (prior state was on) or leave
+    /// the engine stopped (prior state was off). All engine.* ops on the
+    /// single queue means no two concurrent configuration paths.
+    func exitBypass() {
+        if isApplyingRouting { return }
         let target: String? = {
             if let uid = preBypassOutputUID,
                availableOutputs.contains(where: { $0.uid == uid }) {
@@ -585,17 +664,36 @@ final class AppState: ObservableObject {
             }
             return outputDeviceUID
         }()
+        let restoreEnabled = preBypassEQEnabled
         preBypassOutputUID = nil
 
-        if engine.isRunning { engine.stop() }
-        if let target = target {
-            outputDeviceUID = target
-            Log.write("exitPassthrough: restoring output to \(target)")
+        let engine = self.engine
+        isApplyingRouting = true
+        routingQueue.async { [weak self] in
+            engine.stop()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self = self else { return }
+                    self.isApplyingRouting = false
+                    if let target = target {
+                        self.outputDeviceUID = target
+                        Log.write("exitBypass: restoring output to \(target)")
+                    }
+                    self.bypassMode = false
+                    self.eqEnabled = restoreEnabled
+                    if restoreEnabled {
+                        self.startRouting()
+                    } else {
+                        // EQ was off before bypass - leave engine stopped
+                        // and let macOS route normally through the real
+                        // output device. We already called engine.stop()
+                        // above so there's nothing more to do here.
+                        self.restoreSystemOutputIfHijacked()
+                    }
+                    self.persist()
+                }
+            }
         }
-        passthroughMode = false
-        eqEnabled = true
-        startRouting()
-        persist()
     }
 
     func setOutputDevice(uid: String) {
@@ -690,15 +788,21 @@ final class AppState: ObservableObject {
         let aimDB: Float = -3.0
         let delta = aimDB - envelopeDB   // +ve: should raise; -ve: should lower
 
-        // Movement cap: 0.2 dB/sec (0.008 dB per 40 ms tick). Symmetric
-        // in both directions — the same imperceptibility budget applies
-        // whether the algorithm is cutting or recovering.
-        let maxPerTick: Float = 0.008
+        // Movement cap: 0.2 dB/sec (0.008 dB per 40 ms tick) for normal
+        // operation and recovery. When the input is actively clipping
+        // (peak basically at full scale) we let the algorithm pull down
+        // ~2.5x faster - still well under the JND for loudness changes
+        // in program material, but enough to escape sustained clipping
+        // in a second or two instead of five. Recovery rate is unchanged
+        // so quiet-then-loud transients still get the slow anticipation.
+        let isClipping = linearPeak >= 0.995
+        let maxUp: Float = 0.008
+        let maxDown: Float = isClipping ? 0.020 : 0.008
         let step: Float
-        if delta > maxPerTick {
-            step = maxPerTick
-        } else if delta < -maxPerTick {
-            step = -maxPerTick
+        if delta > maxUp {
+            step = maxUp
+        } else if delta < -maxDown {
+            step = -maxDown
         } else {
             step = delta
         }
@@ -719,19 +823,93 @@ final class AppState: ObservableObject {
             workingPreamp = 0
             reapplyEQ()
         }
-        if !on { persist() }
+        // Always persist so the next launch restores whatever the user
+        // last had set (matches loadedPresetID + workingBands treatment).
+        persist()
     }
 
     func updateBand(id: UUID, transform: (inout EQBand) -> Void) {
         guard let i = workingBands.firstIndex(where: { $0.id == id }) else { return }
+        recordUndoSnapshot()
         transform(&workingBands[i])
         loadedPresetID = nil
         reapplyEQ()
         persist()
     }
 
+    /// Mutate a band's parameters without writing settings to disk. For use
+    /// inside high-frequency interactions (e.g. dragging an EQ dot) where we
+    /// would otherwise issue dozens of JSON writes per second. Call
+    /// `commitBandEdits()` once the gesture ends to flush the final state.
+    /// Snapshots for undo are NOT taken here — the caller should call
+    /// `recordUndoSnapshot()` once at the start of the gesture so a single
+    /// undo unwinds the whole drag.
+    func updateBandTransient(id: UUID, transform: (inout EQBand) -> Void) {
+        guard let i = workingBands.firstIndex(where: { $0.id == id }) else { return }
+        transform(&workingBands[i])
+        loadedPresetID = nil
+        reapplyEQ()
+    }
+
+    /// Flush pending transient band edits to disk.
+    func commitBandEdits() {
+        persist()
+    }
+
+    // MARK: - Undo / redo
+
+    private struct EQSnapshot: Equatable {
+        let bands: [EQBand]
+        let preamp: Float
+        let loadedPresetID: UUID?
+    }
+
+    private var undoStack: [EQSnapshot] = []
+    private var redoStack: [EQSnapshot] = []
+    private let undoLimit = 100
+
+    private func currentSnapshot() -> EQSnapshot {
+        EQSnapshot(bands: workingBands,
+                   preamp: workingPreamp,
+                   loadedPresetID: loadedPresetID)
+    }
+
+    /// Capture the current EQ state as a single undoable step. Call before
+    /// mutations the user should be able to revert. Identical consecutive
+    /// snapshots are deduped so a no-op edit doesn't bury real history.
+    func recordUndoSnapshot() {
+        let snap = currentSnapshot()
+        if undoStack.last == snap { return }
+        undoStack.append(snap)
+        if undoStack.count > undoLimit {
+            undoStack.removeFirst(undoStack.count - undoLimit)
+        }
+        redoStack.removeAll()
+    }
+
+    func undo() {
+        guard let prev = undoStack.popLast() else { return }
+        redoStack.append(currentSnapshot())
+        apply(prev)
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(currentSnapshot())
+        apply(next)
+    }
+
+    private func apply(_ s: EQSnapshot) {
+        workingBands = s.bands
+        workingPreamp = s.preamp
+        loadedPresetID = s.loadedPresetID
+        reapplyEQ()
+        persist()
+    }
+
     func addBand() {
         guard workingBands.count < EQEngine.maxBands else { return }
+        recordUndoSnapshot()
         workingBands.append(EQBand.defaultPeak)
         loadedPresetID = nil
         reapplyEQ()
@@ -739,6 +917,7 @@ final class AppState: ObservableObject {
     }
 
     func removeBand(id: UUID) {
+        recordUndoSnapshot()
         workingBands.removeAll { $0.id == id }
         loadedPresetID = nil
         if soloedBandID == id { soloedBandID = nil }
@@ -747,6 +926,7 @@ final class AppState: ObservableObject {
     }
 
     func resetWorkingEQ() {
+        recordUndoSnapshot()
         workingPreamp = 0
         workingBands = []
         loadedPresetID = nil
@@ -759,32 +939,45 @@ final class AppState: ObservableObject {
 
     func loadPreset(_ id: UUID) {
         guard let p = presets.first(where: { $0.id == id }) else { return }
-        let prevOutput = outputDeviceUID
+        recordUndoSnapshot()
         workingPreamp = p.preampDB
         workingBands = p.bands.map { EQBand(id: UUID(), type: $0.type,
                                             frequency: $0.frequency, gain: $0.gain,
                                             q: $0.q, bypass: $0.bypass) }
-        if let prefUID = p.outputDeviceUID, DeviceCatalog.device(uid: prefUID) != nil {
-            outputDeviceUID = prefUID
-        }
         loadedPresetID = id
-        // Only restart routing if the preset actually changed the output
-        // device. A preset that targets the same output device only needs
-        // a live EQ-coefficient update — restarting routing here would
-        // cause a brief audio gap on every preset click.
-        if eqEnabled {
-            if outputDeviceUID != prevOutput {
-                Log.write("loadPreset(\(p.name)) changed output - restarting routing")
-                restartRouting()
-            } else {
-                reapplyEQ()
-            }
-        }
+        // Presets don't carry an output device any more, so a load is
+        // always just a live coefficient update on the current output.
+        if eqEnabled { reapplyEQ() }
         persist()
     }
 
-    /// Save the current working EQ + current output device under `name` as a
-    /// new preset.
+    /// Save a fitted-from-curve preset and load it. Used by the room
+    /// correction wizard once it's solved a set of bands against a
+    /// target. Bypasses the "this is the current working EQ" path so
+    /// the working EQ isn't dirtied by intermediate fitting attempts.
+    func commitFittedPreset(name: String, bands: [EQBand], preampDB: Float) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmed.isEmpty ? "Room correction" : trimmed
+        let preset = EQPreset(
+            id: UUID(),
+            name: finalName,
+            preampDB: preampDB,
+            bands: bands.map {
+                EQBand(id: UUID(), type: $0.type,
+                       frequency: $0.frequency, gain: $0.gain,
+                       q: $0.q, bypass: $0.bypass)
+            })
+        recordUndoSnapshot()
+        presets.append(preset)
+        loadedPresetID = preset.id
+        workingPreamp = preset.preampDB
+        workingBands = preset.bands
+        Storage.savePresets(presets)
+        if eqEnabled { reapplyEQ() }
+        persist()
+    }
+
+    /// Save the current working EQ under `name` as a new preset.
     func saveCurrentAsNewPreset(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = trimmed.isEmpty ? "Untitled \(presets.count + 1)" : trimmed
@@ -792,7 +985,6 @@ final class AppState: ObservableObject {
             id: UUID(),
             name: finalName,
             preampDB: workingPreamp,
-            outputDeviceUID: outputDeviceUID,
             bands: workingBands)
         presets.append(preset)
         loadedPresetID = preset.id
@@ -800,12 +992,11 @@ final class AppState: ObservableObject {
         persist()
     }
 
-    /// Overwrite the existing preset with the current working EQ + output.
+    /// Overwrite the existing preset with the current working EQ.
     func updatePreset(_ id: UUID) {
         guard let i = presets.firstIndex(where: { $0.id == id }) else { return }
         presets[i].preampDB = workingPreamp
         presets[i].bands = workingBands
-        presets[i].outputDeviceUID = outputDeviceUID
         loadedPresetID = id
         Storage.savePresets(presets)
         persist()
@@ -829,7 +1020,7 @@ final class AppState: ObservableObject {
     // MARK: - Engine control
 
     private func applyEnabledState() {
-        if eqEnabled || passthroughMode {
+        if eqEnabled || bypassMode {
             startRouting()
         } else {
             engine.stop()
@@ -955,7 +1146,7 @@ final class AppState: ObservableObject {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         guard let self = self else { return }
-                        engine.setBypass(self.passthroughMode || !self.eqEnabled)
+                        engine.setBypass(self.bypassMode || !self.eqEnabled)
                         self.lastError = nil
                         self.isApplyingRouting = false
                         self.currentRoutingWatchdogID = nil
@@ -1034,8 +1225,7 @@ final class AppState: ObservableObject {
     /// Parse an AutoEQ ParametricEQ.txt file and add it as a new preset.
     func importAutoEQ(text: String, defaultName: String) -> Result<EQPreset, AutoEQFormat.ParseError> {
         let result = AutoEQFormat.decode(text: text, defaultName: defaultName)
-        if case .success(var preset) = result {
-            preset.outputDeviceUID = outputDeviceUID
+        if case .success(let preset) = result {
             presets.append(preset)
             Storage.savePresets(presets)
             return .success(preset)
@@ -1051,7 +1241,6 @@ final class AppState: ObservableObject {
     func exportWorkingAutoEQ(name: String = "Earshot working EQ") -> String {
         let p = EQPreset(id: UUID(), name: name,
                          preampDB: workingPreamp,
-                         outputDeviceUID: outputDeviceUID,
                          bands: workingBands)
         return AutoEQFormat.encode(p)
     }
@@ -1060,6 +1249,7 @@ final class AppState: ObservableObject {
     func loadWorkingFromAutoEQ(text: String) -> Result<Void, AutoEQFormat.ParseError> {
         switch AutoEQFormat.decode(text: text, defaultName: "Imported") {
         case .success(let p):
+            recordUndoSnapshot()
             workingPreamp = p.preampDB
             workingBands = p.bands
             loadedPresetID = nil
@@ -1079,7 +1269,7 @@ final class AppState: ObservableObject {
         return headphoneIndex.filter { $0.name.lowercased().contains(q) }
     }
 
-    /// Fetch the live AutoEq oratory1990 catalog from GitHub. Replaces the
+    /// Fetch the live AutoEQ oratory1990 catalog from GitHub. Replaces the
     /// bundled list with the full set (~hundreds of headphones). Failure
     /// (offline, rate-limited) leaves the existing list intact.
     func refreshHeadphoneIndex() async {
@@ -1102,8 +1292,7 @@ final class AppState: ObservableObject {
         headphoneFetchInProgress = true
         defer { headphoneFetchInProgress = false }
         do {
-            var preset = try await HeadphoneIndex.fetchPreset(for: entry)
-            preset.outputDeviceUID = outputDeviceUID
+            let preset = try await HeadphoneIndex.fetchPreset(for: entry)
             presets.append(preset)
             loadedPresetID = preset.id
             workingPreamp = preset.preampDB

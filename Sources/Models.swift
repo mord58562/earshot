@@ -115,11 +115,29 @@ struct EQPreset: Codable, Identifiable, Equatable {
     var id: UUID
     var name: String
     var preampDB: Float
-    /// Output device UID this preset prefers. `nil` = use whatever the user
-    /// has currently selected as output. Populated when the user explicitly
-    /// saves a preset with a chosen device.
-    var outputDeviceUID: String?
     var bands: [EQBand]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, preampDB, bands
+    }
+
+    init(id: UUID, name: String, preampDB: Float, bands: [EQBand]) {
+        self.id = id
+        self.name = name
+        self.preampDB = preampDB
+        self.bands = bands
+    }
+
+    /// Decode older preset files that included a per-preset output device
+    /// UID. We silently drop that field - the current output is a
+    /// system-wide setting, not a preset attribute.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.preampDB = try c.decode(Float.self, forKey: .preampDB)
+        self.bands = try c.decode([EQBand].self, forKey: .bands)
+    }
 }
 
 struct PresetFile: Codable {
@@ -138,21 +156,26 @@ struct AppSettings: Codable, Equatable {
     /// The id of the preset most recently loaded. Cleared when the user edits
     /// or saves; purely a UI hint, not authoritative.
     var loadedPresetID: UUID?
+    /// Auto-preamp on/off, persisted so the next launch restores whatever
+    /// the user last had set (same treatment as the loaded preset and
+    /// working bands).
+    var autoPreampEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case inputDeviceUID, outputDeviceUID, eqEnabled, workingPreamp,
-             workingBands, loadedPresetID
+             workingBands, loadedPresetID, autoPreampEnabled
     }
 
     init(inputDeviceUID: String?, outputDeviceUID: String?, eqEnabled: Bool,
          workingPreamp: Float, workingBands: [EQBand],
-         loadedPresetID: UUID?) {
+         loadedPresetID: UUID?, autoPreampEnabled: Bool) {
         self.inputDeviceUID = inputDeviceUID
         self.outputDeviceUID = outputDeviceUID
         self.eqEnabled = eqEnabled
         self.workingPreamp = workingPreamp
         self.workingBands = workingBands
         self.loadedPresetID = loadedPresetID
+        self.autoPreampEnabled = autoPreampEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -163,6 +186,7 @@ struct AppSettings: Codable, Equatable {
         self.workingPreamp = try c.decodeIfPresent(Float.self, forKey: .workingPreamp) ?? 0
         self.workingBands = try c.decodeIfPresent([EQBand].self, forKey: .workingBands) ?? []
         self.loadedPresetID = try c.decodeIfPresent(UUID.self, forKey: .loadedPresetID)
+        self.autoPreampEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoPreampEnabled) ?? false
     }
 
     static let empty = AppSettings(
@@ -171,7 +195,8 @@ struct AppSettings: Codable, Equatable {
         eqEnabled: false,
         workingPreamp: 0,
         workingBands: [],
-        loadedPresetID: nil)
+        loadedPresetID: nil,
+        autoPreampEnabled: false)
 }
 
 /// Convert EQ Q to bandwidth in octaves (the unit AVAudioUnitEQ uses for

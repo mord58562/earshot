@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""earshot-linux: apply an AutoEQ ParametricEQ.txt system-wide on Linux.
+
+What this does
+==============
+Reads an AutoEQ-format ParametricEQ.txt file and writes a PipeWire
+filter-chain config that creates a virtual sink called "Earshot".
+Anything you route to the Earshot sink gets the EQ applied and forwards
+to your real default output.
+
+Background
+----------
+Linux's audio EQ situation in 2026 is "you have the tools but nobody
+gives you a focused workflow." PipeWire ships with a builtin biquad
+filter-chain module (`libpipewire-module-filter-chain`) that's
+parametric-EQ-capable and runs at near-zero CPU. The thing missing is
+something that takes the AutoEQ ParametricEQ.txt format your headphones
+were measured for and turns it into a working filter-chain config
+without you hand-translating the bands.
+
+This script is that translator. It does not run as a daemon. It writes
+a config file; PipeWire picks it up on reload.
+
+Why not a GUI?
+--------------
+On macOS, Earshot ships as a polished menubar GUI because that's where
+the gap was. On Linux, EasyEffects already gives you a GUI for
+PipeWire effects. The remaining gap is "apply an AutoEQ preset
+system-wide in one command", which is what this script delivers.
+
+If you want a GUI, install EasyEffects and import the same
+ParametricEQ.txt manually - it'll do the conversion at runtime instead
+of via this script.
+
+Requirements
+------------
+- PipeWire >= 0.3.60 (the filter-chain module is stable from there)
+- Python 3.8+
+- Audio default output already configured in PipeWire / wireplumber
+
+Usage
+-----
+    earshot-linux install ~/Downloads/Sennheiser_HD_600.txt
+        Generate the filter-chain config and reload PipeWire.
+
+    earshot-linux remove
+        Remove the config and reload PipeWire. Restores normal audio.
+
+    earshot-linux print ~/Downloads/Sennheiser_HD_600.txt
+        Dump the generated config to stdout without installing it.
+
+Once installed, set the default output to "Earshot" via your sound
+settings (or `pactl set-default-sink earshot.eq`).
+"""
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+CONFIG_DIR = Path.home() / ".config" / "pipewire" / "pipewire.conf.d"
+CONFIG_NAME = "99-earshot-eq.conf"
+
+
+def parse_autoeq(text: str):
+    """Parse an AutoEQ ParametricEQ.txt into (preamp_db, bands).
+
+    Format reference (output of EQ -> Generic Parametric EQ from AutoEQ
+    and REW):
+
+        Preamp: -6.5 dB
+        Filter 1: ON PK Fc 105 Hz Gain 4.5 dB Q 0.71
+        Filter 2: ON HSC Fc 11000 Hz Gain -3.0 dB Q 0.71
+        ...
+
+    Filter types:
+        PK   -> peaking (biquad bq_peaking)
+        LSC  -> low shelf (bq_lowshelf)
+        HSC  -> high shelf (bq_highshelf)
+        LPQ  -> low-pass with Q (bq_lowpass)
+        HPQ  -> high-pass with Q (bq_highpass)
+        BP   -> band-pass (bq_bandpass)
+        NO   -> notch (bq_notch)
+        AP   -> all-pass (bq_allpass)
+    """
+    preamp = 0.0
+    bands = []
+    preamp_re = re.compile(r"preamp\s*:\s*([-+]?\d+\.?\d*)\s*dB", re.I)
+    band_re = re.compile(
+        r"^\s*filter\s+\d+\s*:\s*on\s+(\w+)"
+        r"\s+fc\s+([\d.]+)\s*hz"
+        r"\s+gain\s+([-+]?[\d.]+)\s*dB"
+        r"\s+q\s+([\d.]+)\s*$",
+        re.I)
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = preamp_re.match(line)
+        if m:
+            preamp = float(m.group(1))
+            continue
+        m = band_re.match(line)
+        if m:
+            kind, freq, gain, q = m.groups()
+            bands.append({
+                "type": kind.upper(),
+                "freq": float(freq),
+                "gain": float(gain),
+                "q": float(q),
+            })
+    return preamp, bands
+
+
+# AutoEQ filter type -> PipeWire builtin biquad label.
+LABEL_MAP = {
+    "PK":  "bq_peaking",
+    "LSC": "bq_lowshelf",
+    "HSC": "bq_highshelf",
+    "LPQ": "bq_lowpass",
+    "HPQ": "bq_highpass",
+    "BP":  "bq_bandpass",
+    "NO":  "bq_notch",
+    "AP":  "bq_allpass",
+}
+
+
+def render_config(preamp_db: float, bands: list[dict]) -> str:
+    """Render a PipeWire context.modules block for filter-chain.
+
+    The graph is a linear chain of biquad nodes - input gain applies
+    the preamp, then each band, then output. We chain Out -> In for
+    every node so the audio passes through in order.
+    """
+    if not bands:
+        raise ValueError("No filter bands parsed - check the input file format.")
+
+    nodes_lines = []
+    # Preamp as a builtin "copy" node with gain. PipeWire's filter-chain
+    # exposes a `linear` builtin that does y = a*x + b; we use it as a
+    # scalar pre-gain.
+    nodes_lines.append('        {')
+    nodes_lines.append('          type = builtin')
+    nodes_lines.append('          name = preamp')
+    nodes_lines.append('          label = linear')
+    nodes_lines.append(f'          control = {{ "Mult" = {db_to_linear(preamp_db):.6f}  "Add" = 0.0 }}')
+    nodes_lines.append('        }')
+
+    prev_node = "preamp"
+    links = []
+    for i, b in enumerate(bands, start=1):
+        label = LABEL_MAP.get(b["type"])
+        if label is None:
+            # Skip unknown filter types rather than erroring out the
+            # whole config - log it to stderr.
+            print(f"warn: skipping unsupported filter type {b['type']!r}",
+                  file=sys.stderr)
+            continue
+        name = f"band_{i}"
+        nodes_lines.append('        {')
+        nodes_lines.append('          type = builtin')
+        nodes_lines.append(f'          name = {name}')
+        nodes_lines.append(f'          label = {label}')
+        nodes_lines.append(
+            f'          control = {{ "Freq" = {b["freq"]:.2f}  '
+            f'"Q" = {b["q"]:.3f}  "Gain" = {b["gain"]:.2f} }}')
+        nodes_lines.append('        }')
+        links.append(f'        {{ output = "{prev_node}:Out"  input = "{name}:In" }}')
+        prev_node = name
+
+    nodes_block = "\n".join(nodes_lines)
+    links_block = "\n".join(links)
+
+    return f"""# Generated by earshot-linux. Do not edit by hand - re-run the script
+# with a new ParametricEQ.txt to update.
+context.modules = [
+  {{
+    name = libpipewire-module-filter-chain
+    args = {{
+      node.description = "Earshot EQ"
+      media.name       = "Earshot EQ"
+      filter.graph = {{
+        nodes = [
+{nodes_block}
+        ]
+        links = [
+{links_block}
+        ]
+      }}
+      capture.props = {{
+        node.name      = "earshot.eq"
+        media.class    = "Audio/Sink"
+        audio.channels = 2
+        audio.position = [ FL FR ]
+      }}
+      playback.props = {{
+        node.name      = "earshot.eq.output"
+        node.passive   = true
+        audio.channels = 2
+        audio.position = [ FL FR ]
+      }}
+    }}
+  }}
+]
+"""
+
+
+def db_to_linear(db: float) -> float:
+    return 10.0 ** (db / 20.0)
+
+
+def reload_pipewire():
+    """Restart the user's pipewire service so the new config is picked up.
+
+    Tries systemctl --user first (the modern path on most distros).
+    Falls back to `pkill -HUP` if systemd isn't around.
+    """
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "restart", "pipewire", "pipewire-pulse", "wireplumber"],
+            check=True)
+        print("pipewire restarted.")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        try:
+            subprocess.run(["pkill", "-HUP", "pipewire"], check=False)
+            print("sent HUP to pipewire (systemd not detected - manual restart may be needed).")
+        except FileNotFoundError:
+            print("could not restart pipewire automatically. Log out / log in, or run "
+                  "`systemctl --user restart pipewire`.")
+
+
+def cmd_install(args):
+    text = Path(args.txt).read_text()
+    preamp, bands = parse_autoeq(text)
+    config = render_config(preamp, bands)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    out = CONFIG_DIR / CONFIG_NAME
+    out.write_text(config)
+    print(f"wrote {out} ({len(bands)} bands, preamp {preamp:+.1f} dB)")
+    reload_pipewire()
+    print()
+    print("Set your output to 'Earshot EQ' in your sound settings, or run:")
+    print("  pactl set-default-sink earshot.eq")
+
+
+def cmd_remove(args):
+    out = CONFIG_DIR / CONFIG_NAME
+    if out.exists():
+        out.unlink()
+        print(f"removed {out}")
+        reload_pipewire()
+    else:
+        print(f"no config at {out}; nothing to remove.")
+
+
+def cmd_print(args):
+    text = Path(args.txt).read_text()
+    preamp, bands = parse_autoeq(text)
+    sys.stdout.write(render_config(preamp, bands))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="earshot-linux",
+        description="Apply an AutoEQ ParametricEQ.txt system-wide via PipeWire.")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_install = sub.add_parser("install", help="install + reload PipeWire")
+    p_install.add_argument("txt", help="path to a ParametricEQ.txt file")
+    p_install.set_defaults(func=cmd_install)
+
+    p_remove = sub.add_parser("remove", help="remove + reload PipeWire")
+    p_remove.set_defaults(func=cmd_remove)
+
+    p_print = sub.add_parser("print", help="dump the generated config to stdout")
+    p_print.add_argument("txt", help="path to a ParametricEQ.txt file")
+    p_print.set_defaults(func=cmd_print)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

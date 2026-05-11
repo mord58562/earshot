@@ -5,31 +5,33 @@ and every sound your Mac plays runs through the EQ on its way out.
 
 ## Features
 
-- **Parametric EQ editor** - every parameter `AVAudioUnitEQ` exposes:
-  filter type (peak / low-shelf / high-shelf / low-pass / high-pass / band-pass /
-  notch / resonant variants), frequency, gain, Q, per-band bypass, and global
-  preamp. Up to 24 bands.
+- **Drag-the-curve editor** - bands are dots on the frequency response.
+  Drag to set freq + gain, Option / Shift to constrain to one axis,
+  double-click to reset gain. Vertical guide + live freq/dB/Q readout on
+  hover. Cmd-Z / Cmd-Shift-Z undo/redo. Up to 24 bands.
+- **Full filter set** - every parameter `AVAudioUnitEQ` exposes: peak,
+  low / high shelf, low / high pass (with resonant variants), band-pass,
+  notch. Frequency, gain, Q, per-band bypass, and a global preamp.
 - **Live editing** - band parameters update without engine restart, so
-  dragging a slider doesn't introduce dropouts.
-- **Solo a band** - temporarily bypass every other band to hear what one
-  filter is doing.
-- **Auto preamp** - optional toggle that continuously trims preamp to keep
-  peaks just below clipping. Cuts hard on real digital clipping, only
-  recovers on signal (won't ramp up gain on silence). Only ever attenuates -
-  gain is capped at 0 dB and Auto never adds make-up gain above unity.
-- **Speakers passthrough** - one-click button that routes audio to the
-  built-in speakers with the EQ bypassed. Useful when you yank headphones
-  and want laptop speakers without touching macOS sound settings.
-- **Preset library** - save the current EQ + output device under any name.
-  Loaded preset is highlighted; "Update" overwrites; rename or delete from
-  the row menu. Stored at `~/Library/Application Support/Earshot/presets.json`.
+  dragging a slider or a dot doesn't introduce dropouts.
+- **Auto preamp** - optional toggle that continuously trims preamp to
+  keep peaks just below clipping. Movement is imperceptible (~0.2 dB/sec)
+  at rest and a little faster during active clipping. Only attenuates;
+  capped at 0 dB so it never adds make-up gain.
+- **Bypass** - one-click button that routes audio to the built-in
+  speakers with the EQ bypassed. Useful when you yank headphones and
+  want laptop speakers without touching macOS sound settings.
+- **Preset library** - save the current EQ under any name. Loaded preset
+  is highlighted; the row menu has Update, Rename, Export, Delete.
+  Stored at `~/Library/Application Support/Earshot/presets.json`.
 - **AutoEQ import / export** - reads and writes
   [`ParametricEQ.txt`](https://github.com/jaakkopasanen/AutoEq),
   the same format AutoEQ, EqualizerAPO, Wavelet, and Poweramp Equalizer
   use, so presets carry across without a converter.
-- **Find your headphone** - search the AutoEq oratory1990 catalog (~bundled
-  list + on-demand refresh from GitHub), click a model, and Earshot
-  downloads its ParametricEQ.txt and adds it as a preset.
+- **Find your headphone** - search the bundled AutoEQ catalog (~2000
+  entries across oratory1990 + Crinacle measurements; on-demand refresh
+  from GitHub), click a model, and Earshot downloads its
+  ParametricEQ.txt and adds it as a preset.
 - **Tahoe-styled UI** - frosted-glass popover, continuous-corner card
   surfaces, custom logo and app icon generated programmatically at build.
 
@@ -83,6 +85,19 @@ launch via `SMAppService`.
 
 The app remembers your last state across launches.
 
+## Linux
+
+There's a Linux CLI in [`linux/`](linux/) that does the most useful piece
+of what Earshot does on macOS: take an AutoEQ `ParametricEQ.txt` and
+apply it system-wide. It generates a PipeWire `filter-chain` config that
+creates a virtual sink called `Earshot EQ`; anything you route to that
+sink gets the EQ and forwards to your real default output.
+
+No GUI on Linux - if you want one, install
+[EasyEffects](https://github.com/wwmm/easyeffects) and import the same
+`ParametricEQ.txt` manually. See [`linux/README.md`](linux/README.md)
+for the install + usage.
+
 ## File formats
 
 **Internal preset library** is JSON at
@@ -113,12 +128,12 @@ MIT - see [LICENSE](LICENSE).
 
 - **BlackHole 2ch** by Existential Audio (https://existential.audio/blackhole/)
   - Required runtime dependency. Not bundled. Users install separately. MIT-licensed.
-- **AutoEq** by Jaakko Pasanen (https://github.com/jaakkopasanen/AutoEq)
-  - The "Find a preset" feature browses AutoEq's published oratory1990
+- **AutoEQ** by Jaakko Pasanen (https://github.com/jaakkopasanen/AutoEQ)
+  - The "Find a preset" feature browses AutoEQ's published oratory1990
     measurements and downloads their `ParametricEQ.txt` files on demand.
     Earshot bundles a small index of URLs; the underlying measurement data
-    is not included in this repository. AutoEq is MIT-licensed.
-- **oratory1990** measurements published as part of AutoEq.
+    is not included in this repository. AutoEQ is MIT-licensed.
+- **oratory1990** measurements published as part of AutoEQ.
 - **TPCircularBuffer** by Michael Tyson / A Tasty Pixel
   (https://github.com/michaeltyson/TPCircularBuffer) — the lock-free SPSC
   ring buffer that hands audio frames from the input AUHAL to the output
@@ -139,7 +154,7 @@ InputCapture.swift      Raw HALOutput AUHAL bound to BlackHole; producer side
 EQEngine.swift          AVAudioEngine bound directly to user output device;
                         SourceNode → mixer → Varispeed → AVAudioUnitEQ
 AutoEQFormat.swift      Parse / emit AutoEQ ParametricEQ.txt
-HeadphoneIndex.swift    Bundled AutoEq headphone index + on-demand refresh
+HeadphoneIndex.swift    Bundled AutoEQ headphone index + on-demand refresh
 Popover.swift           SwiftUI popover content + EQ curve drawing
 Icon.swift              Programmatic menubar glyph
 Logging.swift           Rotating file log
