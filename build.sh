@@ -32,10 +32,8 @@ SOURCES=(
   Sources/EQEngine.swift
   Sources/AutoEQFormat.swift
   Sources/HeadphoneIndex.swift
-  Sources/CurveMatcher.swift
   Sources/AppState.swift
   Sources/Icon.swift
-  Sources/RoomCorrectionWizard.swift
   Sources/Popover.swift
   Sources/main.swift
 )

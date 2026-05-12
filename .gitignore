@@ -8,4 +8,7 @@ Resources/AppIcon.icns
 Resources/AppIcon.iconset/
 # Personal-context drafts that shouldn't ship in the public repo.
 REDDIT_POST.md
-docs/REW_EDIFIER_SETUP.md
+
+# Python bytecode from running linux/earshot-linux locally.
+__pycache__/
+*.pyc

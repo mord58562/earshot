@@ -1,70 +1,78 @@
 #!/usr/bin/env python3
-"""earshot-linux: apply an AutoEQ ParametricEQ.txt system-wide on Linux.
+"""earshot-linux: Earshot's Linux CLI - applies an AutoEQ
+ParametricEQ.txt system-wide via a PipeWire filter-chain virtual sink.
 
 What this does
 ==============
-Reads an AutoEQ-format ParametricEQ.txt file and writes a PipeWire
-filter-chain config that creates a virtual sink called "Earshot".
-Anything you route to the Earshot sink gets the EQ applied and forwards
-to your real default output.
+Reads an AutoEQ-format `ParametricEQ.txt` and writes a PipeWire
+filter-chain config that creates a virtual sink called "Earshot EQ".
+Anything you route to that sink gets the EQ applied and forwards to
+your real default output.
 
-Background
-----------
-Linux's audio EQ situation in 2026 is "you have the tools but nobody
-gives you a focused workflow." PipeWire ships with a builtin biquad
-filter-chain module (`libpipewire-module-filter-chain`) that's
-parametric-EQ-capable and runs at near-zero CPU. The thing missing is
-something that takes the AutoEQ ParametricEQ.txt format your headphones
-were measured for and turns it into a working filter-chain config
-without you hand-translating the bands.
+Subcommands
+-----------
+    earshot-linux doctor
+        Check PipeWire / wireplumber / pactl presence and version.
 
-This script is that translator. It does not run as a daemon. It writes
-a config file; PipeWire picks it up on reload.
+    earshot-linux install <ParametricEQ.txt>
+        Apply an AutoEQ-format preset.
 
-Why not a GUI?
---------------
-On macOS, Earshot ships as a polished menubar GUI because that's where
-the gap was. On Linux, EasyEffects already gives you a GUI for
-PipeWire effects. The remaining gap is "apply an AutoEQ preset
-system-wide in one command", which is what this script delivers.
+    earshot-linux headphone <query>
+        Search the bundled AutoEQ catalog (oratory1990 + Crinacle, ~2000
+        entries) for a headphone name, download its ParametricEQ.txt,
+        and install it.
 
-If you want a GUI, install EasyEffects and import the same
-ParametricEQ.txt manually - it'll do the conversion at runtime instead
-of via this script.
+    earshot-linux list [query]
+        Search/list bundled headphone catalog entries.
+
+    earshot-linux print <ParametricEQ.txt>
+        Dump the generated config without installing.
+
+    earshot-linux status
+        Report whether the Earshot sink is loaded and the default sink.
+
+    earshot-linux default
+        Set the Earshot sink as the system default output.
+
+    earshot-linux remove
+        Remove the config and reload PipeWire.
 
 Requirements
 ------------
-- PipeWire >= 0.3.60 (the filter-chain module is stable from there)
-- Python 3.8+
-- Audio default output already configured in PipeWire / wireplumber
-
-Usage
------
-    earshot-linux install ~/Downloads/Sennheiser_HD_600.txt
-        Generate the filter-chain config and reload PipeWire.
-
-    earshot-linux remove
-        Remove the config and reload PipeWire. Restores normal audio.
-
-    earshot-linux print ~/Downloads/Sennheiser_HD_600.txt
-        Dump the generated config to stdout without installing it.
-
-Once installed, set the default output to "Earshot" via your sound
-settings (or `pactl set-default-sink earshot.eq`).
+- PipeWire >= 0.3.60 (the filter-chain module is stable from there).
+- Python 3.8+.
+- A configured default output in PipeWire / wireplumber.
 """
 
 import argparse
-import os
+import json
 import re
+import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "pipewire" / "pipewire.conf.d"
 CONFIG_NAME = "99-earshot-eq.conf"
+EARSHOT_SINK_NAME = "earshot.eq"
+
+# Where to find the bundled headphone catalog. Try the macOS app bundle
+# layout first (Resources/headphones.json next to this script's repo),
+# then fall back to a copy alongside this script.
+SCRIPT_DIR = Path(__file__).resolve().parent
+CATALOG_CANDIDATES = [
+    SCRIPT_DIR / "headphones.json",
+    SCRIPT_DIR.parent / "Resources" / "headphones.json",
+    Path.home() / ".local" / "share" / "earshot" / "headphones.json",
+]
 
 
-def parse_autoeq(text: str):
+# ---------------------------------------------------------------------
+# AutoEQ ParametricEQ.txt parsing
+# ---------------------------------------------------------------------
+
+def parse_autoeq(text):
     """Parse an AutoEQ ParametricEQ.txt into (preamp_db, bands).
 
     Format reference (output of EQ -> Generic Parametric EQ from AutoEQ
@@ -73,17 +81,12 @@ def parse_autoeq(text: str):
         Preamp: -6.5 dB
         Filter 1: ON PK Fc 105 Hz Gain 4.5 dB Q 0.71
         Filter 2: ON HSC Fc 11000 Hz Gain -3.0 dB Q 0.71
-        ...
 
-    Filter types:
-        PK   -> peaking (biquad bq_peaking)
-        LSC  -> low shelf (bq_lowshelf)
-        HSC  -> high shelf (bq_highshelf)
-        LPQ  -> low-pass with Q (bq_lowpass)
-        HPQ  -> high-pass with Q (bq_highpass)
-        BP   -> band-pass (bq_bandpass)
-        NO   -> notch (bq_notch)
-        AP   -> all-pass (bq_allpass)
+    Filter types we map to PipeWire builtin biquad labels:
+        PK  -> bq_peaking      LSC -> bq_lowshelf
+        HSC -> bq_highshelf    LPQ -> bq_lowpass
+        HPQ -> bq_highpass     BP  -> bq_bandpass
+        NO  -> bq_notch        AP  -> bq_allpass
     """
     preamp = 0.0
     bands = []
@@ -93,7 +96,8 @@ def parse_autoeq(text: str):
         r"\s+fc\s+([\d.]+)\s*hz"
         r"\s+gain\s+([-+]?[\d.]+)\s*dB"
         r"\s+q\s+([\d.]+)\s*$",
-        re.I)
+        re.I,
+    )
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
@@ -114,7 +118,6 @@ def parse_autoeq(text: str):
     return preamp, bands
 
 
-# AutoEQ filter type -> PipeWire builtin biquad label.
 LABEL_MAP = {
     "PK":  "bq_peaking",
     "LSC": "bq_lowshelf",
@@ -127,52 +130,56 @@ LABEL_MAP = {
 }
 
 
-def render_config(preamp_db: float, bands: list[dict]) -> str:
+# ---------------------------------------------------------------------
+# PipeWire filter-chain config rendering
+# ---------------------------------------------------------------------
+
+def db_to_linear(db):
+    return 10.0 ** (db / 20.0)
+
+
+def render_config(preamp_db, bands):
     """Render a PipeWire context.modules block for filter-chain.
 
-    The graph is a linear chain of biquad nodes - input gain applies
-    the preamp, then each band, then output. We chain Out -> In for
-    every node so the audio passes through in order.
+    The graph is a linear chain: preamp (linear gain) -> band_1 -> ...
+    -> band_N. We omit explicit links so PipeWire auto-connects nodes
+    in declaration order, including the chain's capture (sink input)
+    to the first node and the last node to the chain's playback.
+    Mixing explicit inter-node links with implicit capture/playback
+    links is unreliable; the docs say "if you specify any link, all
+    links must be specified explicitly", so leaving the links section
+    empty is the safe path.
     """
     if not bands:
-        raise ValueError("No filter bands parsed - check the input file format.")
+        raise ValueError("No filter bands - check the input file format.")
 
-    nodes_lines = []
-    # Preamp as a builtin "copy" node with gain. PipeWire's filter-chain
-    # exposes a `linear` builtin that does y = a*x + b; we use it as a
-    # scalar pre-gain.
-    nodes_lines.append('        {')
-    nodes_lines.append('          type = builtin')
-    nodes_lines.append('          name = preamp')
-    nodes_lines.append('          label = linear')
-    nodes_lines.append(f'          control = {{ "Mult" = {db_to_linear(preamp_db):.6f}  "Add" = 0.0 }}')
-    nodes_lines.append('        }')
+    nodes = []
+    nodes.append(
+        "        {\n"
+        "          type = builtin\n"
+        "          name = preamp\n"
+        "          label = linear\n"
+        f"          control = {{ \"Mult\" = {db_to_linear(preamp_db):.6f}  \"Add\" = 0.0 }}\n"
+        "        }"
+    )
 
-    prev_node = "preamp"
-    links = []
     for i, b in enumerate(bands, start=1):
         label = LABEL_MAP.get(b["type"])
         if label is None:
-            # Skip unknown filter types rather than erroring out the
-            # whole config - log it to stderr.
             print(f"warn: skipping unsupported filter type {b['type']!r}",
                   file=sys.stderr)
             continue
-        name = f"band_{i}"
-        nodes_lines.append('        {')
-        nodes_lines.append('          type = builtin')
-        nodes_lines.append(f'          name = {name}')
-        nodes_lines.append(f'          label = {label}')
-        nodes_lines.append(
-            f'          control = {{ "Freq" = {b["freq"]:.2f}  '
-            f'"Q" = {b["q"]:.3f}  "Gain" = {b["gain"]:.2f} }}')
-        nodes_lines.append('        }')
-        links.append(f'        {{ output = "{prev_node}:Out"  input = "{name}:In" }}')
-        prev_node = name
+        nodes.append(
+            "        {\n"
+            "          type = builtin\n"
+            f"          name = band_{i}\n"
+            f"          label = {label}\n"
+            f"          control = {{ \"Freq\" = {b['freq']:.2f}  "
+            f"\"Q\" = {b['q']:.3f}  \"Gain\" = {b['gain']:.2f} }}\n"
+            "        }"
+        )
 
-    nodes_block = "\n".join(nodes_lines)
-    links_block = "\n".join(links)
-
+    nodes_block = "\n".join(nodes)
     return f"""# Generated by earshot-linux. Do not edit by hand - re-run the script
 # with a new ParametricEQ.txt to update.
 context.modules = [
@@ -185,18 +192,15 @@ context.modules = [
         nodes = [
 {nodes_block}
         ]
-        links = [
-{links_block}
-        ]
       }}
       capture.props = {{
-        node.name      = "earshot.eq"
+        node.name      = "{EARSHOT_SINK_NAME}"
         media.class    = "Audio/Sink"
         audio.channels = 2
         audio.position = [ FL FR ]
       }}
       playback.props = {{
-        node.name      = "earshot.eq.output"
+        node.name      = "{EARSHOT_SINK_NAME}.output"
         node.passive   = true
         audio.channels = 2
         audio.position = [ FL FR ]
@@ -207,42 +211,271 @@ context.modules = [
 """
 
 
-def db_to_linear(db: float) -> float:
-    return 10.0 ** (db / 20.0)
-
+# ---------------------------------------------------------------------
+# PipeWire lifecycle (reload, status, default sink)
+# ---------------------------------------------------------------------
 
 def reload_pipewire():
-    """Restart the user's pipewire service so the new config is picked up.
-
-    Tries systemctl --user first (the modern path on most distros).
-    Falls back to `pkill -HUP` if systemd isn't around.
-    """
+    """Restart pipewire / pipewire-pulse / wireplumber so the new config
+    is picked up. Tries systemctl --user; falls back to pkill -HUP."""
     try:
         subprocess.run(
-            ["systemctl", "--user", "restart", "pipewire", "pipewire-pulse", "wireplumber"],
-            check=True)
+            ["systemctl", "--user", "restart",
+             "pipewire", "pipewire-pulse", "wireplumber"],
+            check=True,
+        )
         print("pipewire restarted.")
+        return
     except (subprocess.CalledProcessError, FileNotFoundError):
-        try:
-            subprocess.run(["pkill", "-HUP", "pipewire"], check=False)
-            print("sent HUP to pipewire (systemd not detected - manual restart may be needed).")
-        except FileNotFoundError:
-            print("could not restart pipewire automatically. Log out / log in, or run "
-                  "`systemctl --user restart pipewire`.")
+        pass
+    try:
+        subprocess.run(["pkill", "-HUP", "pipewire"], check=False)
+        print("sent HUP to pipewire (systemd not detected - manual restart may be needed).")
+    except FileNotFoundError:
+        print("Could not restart pipewire automatically. Log out / log in, or run "
+              "`systemctl --user restart pipewire`.")
 
 
-def cmd_install(args):
-    text = Path(args.txt).read_text()
+def pactl_list_sinks():
+    """Return a list of sink names from `pactl list short sinks`."""
+    try:
+        out = subprocess.run(["pactl", "list", "short", "sinks"],
+                             capture_output=True, text=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return []
+    sinks = []
+    for line in out.stdout.splitlines():
+        cols = line.split("\t")
+        if len(cols) >= 2:
+            sinks.append(cols[1])
+    return sinks
+
+
+def pactl_default_sink():
+    try:
+        out = subprocess.run(["pactl", "get-default-sink"],
+                             capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+
+def set_default_sink(name):
+    try:
+        subprocess.run(["pactl", "set-default-sink", name], check=True)
+        print(f"default sink set to {name}.")
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        print(f"failed to set default sink: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------
+# Doctor / environment check
+# ---------------------------------------------------------------------
+
+def version_tuple(s):
+    parts = re.findall(r"\d+", s)
+    return tuple(int(p) for p in parts[:3]) if parts else (0,)
+
+
+def check_command(name, version_flag="--version"):
+    path = shutil.which(name)
+    if not path:
+        return None, None
+    try:
+        out = subprocess.run([name, version_flag],
+                             capture_output=True, text=True, check=False)
+        first = (out.stdout or out.stderr).splitlines()[0] if (out.stdout or out.stderr) else ""
+        m = re.search(r"\d+\.\d+(?:\.\d+)?", first)
+        version = m.group(0) if m else None
+        return path, version
+    except Exception:
+        return path, None
+
+
+def cmd_doctor(args):
+    ok = True
+
+    def report(label, path, version, required=None):
+        nonlocal ok
+        if path is None:
+            print(f"  [missing] {label}")
+            ok = False
+            return
+        if required and version and version_tuple(version) < version_tuple(required):
+            print(f"  [old]     {label} {version} (need >= {required}) at {path}")
+            ok = False
+            return
+        v = f" {version}" if version else ""
+        print(f"  [ok]      {label}{v} at {path}")
+
+    print("Earshot Linux doctor:")
+    pw_path, pw_ver = check_command("pipewire", "--version")
+    report("pipewire", pw_path, pw_ver, required="0.3.60")
+    pp_path, pp_ver = check_command("pipewire-pulse", "--version")
+    report("pipewire-pulse", pp_path, pp_ver)
+    wp_path, wp_ver = check_command("wireplumber", "--version")
+    report("wireplumber", wp_path, wp_ver)
+    pa_path, pa_ver = check_command("pactl", "--version")
+    report("pactl", pa_path, pa_ver)
+
+    # Confirm the filter-chain module .so is on disk somewhere reasonable.
+    candidates = [
+        "/usr/lib/pipewire-0.3/libpipewire-module-filter-chain.so",
+        "/usr/lib/x86_64-linux-gnu/pipewire-0.3/libpipewire-module-filter-chain.so",
+        "/usr/lib64/pipewire-0.3/libpipewire-module-filter-chain.so",
+    ]
+    found = next((c for c in candidates if Path(c).exists()), None)
+    if found:
+        print(f"  [ok]      filter-chain module at {found}")
+    else:
+        # Fall back to a glob across /usr/lib*
+        import glob
+        hits = glob.glob("/usr/lib*/**/libpipewire-module-filter-chain.so",
+                         recursive=True)
+        if hits:
+            print(f"  [ok]      filter-chain module at {hits[0]}")
+        else:
+            print("  [missing] libpipewire-module-filter-chain.so "
+                  "(install pipewire's audio plugins package)")
+            ok = False
+
+    cat = find_catalog()
+    if cat:
+        print(f"  [ok]      headphone catalog at {cat}")
+    else:
+        print(f"  [info]    headphone catalog not found "
+              f"(checked {', '.join(str(p) for p in CATALOG_CANDIDATES)}) "
+              f"- `headphone` subcommand will still work via direct URL search")
+
+    print()
+    print("All good." if ok else "There are problems above. Fix them and re-run.")
+    sys.exit(0 if ok else 1)
+
+
+# ---------------------------------------------------------------------
+# Headphone catalog (bundled JSON snapshot from AutoEQ)
+# ---------------------------------------------------------------------
+
+def find_catalog():
+    for c in CATALOG_CANDIDATES:
+        if c.exists():
+            return c
+    return None
+
+
+def load_catalog():
+    cat_path = find_catalog()
+    if cat_path is None:
+        return None
+    try:
+        with open(cat_path) as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"warn: catalog at {cat_path} unreadable: {e}", file=sys.stderr)
+        return None
+
+
+def search_catalog(query, limit=50):
+    catalog = load_catalog()
+    if catalog is None:
+        return []
+    q = query.lower().strip()
+    if not q:
+        return catalog[:limit]
+    # Score by: exact substring match in name, then measurer.
+    hits = []
+    for entry in catalog:
+        name = entry.get("name", "").lower()
+        meas = entry.get("measurer", "").lower()
+        if q in name:
+            # Prefer matches at start of words.
+            score = 0 if name.startswith(q) else (1 if (" " + q) in name else 2)
+            hits.append((score, entry))
+        elif q in meas:
+            hits.append((3, entry))
+    hits.sort(key=lambda x: x[0])
+    return [h[1] for h in hits[:limit]]
+
+
+def cmd_list(args):
+    results = search_catalog(args.query or "")
+    if not results:
+        cat = find_catalog()
+        if cat is None:
+            print("No bundled catalog found. Copy headphones.json from the macOS "
+                  "app's Resources/ into one of these locations:")
+            for p in CATALOG_CANDIDATES:
+                print(f"  {p}")
+            sys.exit(1)
+        print("No matches.")
+        return
+    print(f"{len(results)} match{'es' if len(results) != 1 else ''}:")
+    for entry in results:
+        name = entry.get("name", "?")
+        meas = entry.get("measurer", "?")
+        print(f"  {name}  [{meas}]")
+
+
+def cmd_headphone(args):
+    query = args.query.strip()
+    results = search_catalog(query, limit=200)
+    if not results:
+        print(f"No headphone matches '{query}'.", file=sys.stderr)
+        sys.exit(1)
+    if len(results) > 1:
+        # Try exact match first (case-insensitive).
+        exact = [e for e in results if e.get("name", "").lower() == query.lower()]
+        if len(exact) == 1:
+            results = exact
+        else:
+            print(f"{len(results)} matches for '{query}'. Be more specific:")
+            for entry in results[:30]:
+                print(f"  {entry.get('name')}  [{entry.get('measurer')}]")
+            if len(results) > 30:
+                print(f"  ... ({len(results) - 30} more)")
+            sys.exit(1)
+    entry = results[0]
+    url = entry["rawTxtURL"]
+    print(f"Downloading: {entry['name']} [{entry['measurer']}]")
+    print(f"  {url}")
+    try:
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            text = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"download failed: {e}", file=sys.stderr)
+        sys.exit(1)
+    _install_from_text(text, label=entry["name"])
+
+
+
+# ---------------------------------------------------------------------
+# Install / remove / print / status
+# ---------------------------------------------------------------------
+
+def _install_from_text(text, label="preset"):
     preamp, bands = parse_autoeq(text)
+    if not bands:
+        print(f"no filter bands parsed from {label!r}", file=sys.stderr)
+        sys.exit(1)
+    _install_config(preamp, bands, label=label)
+
+
+def _install_config(preamp, bands, label="preset"):
     config = render_config(preamp, bands)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     out = CONFIG_DIR / CONFIG_NAME
     out.write_text(config)
-    print(f"wrote {out} ({len(bands)} bands, preamp {preamp:+.1f} dB)")
+    print(f"wrote {out} ({len(bands)} bands, preamp {preamp:+.1f} dB) [{label}]")
     reload_pipewire()
     print()
     print("Set your output to 'Earshot EQ' in your sound settings, or run:")
-    print("  pactl set-default-sink earshot.eq")
+    print(f"  earshot-linux default        # or: pactl set-default-sink {EARSHOT_SINK_NAME}")
+
+
+def cmd_install(args):
+    text = Path(args.txt).read_text()
+    _install_from_text(text, label=args.txt)
 
 
 def cmd_remove(args):
@@ -261,22 +494,66 @@ def cmd_print(args):
     sys.stdout.write(render_config(preamp, bands))
 
 
+def cmd_status(args):
+    cfg = CONFIG_DIR / CONFIG_NAME
+    print(f"config file: {cfg} "
+          f"({'present' if cfg.exists() else 'absent'})")
+    sinks = pactl_list_sinks()
+    has_sink = EARSHOT_SINK_NAME in sinks
+    print(f"earshot sink: {'loaded' if has_sink else 'not loaded'}"
+          + (f" (`{EARSHOT_SINK_NAME}`)" if has_sink else ""))
+    default = pactl_default_sink()
+    if default:
+        marker = " <-- earshot" if default == EARSHOT_SINK_NAME else ""
+        print(f"default sink: {default}{marker}")
+    print(f"available sinks: {', '.join(sinks) if sinks else '(pactl unavailable)'}")
+
+
+def cmd_default(args):
+    set_default_sink(EARSHOT_SINK_NAME)
+
+
+# ---------------------------------------------------------------------
+# CLI plumbing
+# ---------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser(
         prog="earshot-linux",
-        description="Apply an AutoEQ ParametricEQ.txt system-wide via PipeWire.")
+        description="Earshot's Linux CLI: apply an AutoEQ ParametricEQ.txt "
+                    "system-wide via PipeWire.",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_install = sub.add_parser("install", help="install + reload PipeWire")
-    p_install.add_argument("txt", help="path to a ParametricEQ.txt file")
-    p_install.set_defaults(func=cmd_install)
+    p = sub.add_parser("doctor", help="check PipeWire / wireplumber / pactl")
+    p.set_defaults(func=cmd_doctor)
 
-    p_remove = sub.add_parser("remove", help="remove + reload PipeWire")
-    p_remove.set_defaults(func=cmd_remove)
+    p = sub.add_parser("install", help="install an AutoEQ ParametricEQ.txt preset")
+    p.add_argument("txt", help="path to a ParametricEQ.txt file")
+    p.set_defaults(func=cmd_install)
 
-    p_print = sub.add_parser("print", help="dump the generated config to stdout")
-    p_print.add_argument("txt", help="path to a ParametricEQ.txt file")
-    p_print.set_defaults(func=cmd_print)
+    p = sub.add_parser("headphone",
+                       help="search bundled catalog by name and install")
+    p.add_argument("query", help="headphone name (e.g. 'HD 600')")
+    p.set_defaults(func=cmd_headphone)
+
+    p = sub.add_parser("list", help="search/list bundled catalog entries")
+    p.add_argument("query", nargs="?", default="", help="optional search query")
+    p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("print", help="dump the generated config to stdout")
+    p.add_argument("txt", help="path to a ParametricEQ.txt file")
+    p.set_defaults(func=cmd_print)
+
+    p = sub.add_parser("status", help="report sink + default state")
+    p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("default",
+                       help="set the Earshot sink as the system default output")
+    p.set_defaults(func=cmd_default)
+
+    p = sub.add_parser("remove", help="remove the config and reload PipeWire")
+    p.set_defaults(func=cmd_remove)
 
     args = parser.parse_args()
     args.func(args)

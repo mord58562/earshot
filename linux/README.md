@@ -30,58 +30,90 @@ That's it. No build step.
 ```sh
 cp linux/earshot-linux ~/.local/bin/
 chmod +x ~/.local/bin/earshot-linux
+
+# Optional but recommended: drop the bundled headphone catalog into a
+# location the script checks, so `earshot-linux headphone <query>` and
+# `earshot-linux list` work without internet roundtrips per call.
+mkdir -p ~/.local/share/earshot
+cp Resources/headphones.json ~/.local/share/earshot/
 ```
 
 Ensure `~/.local/bin` is on your `$PATH`.
 
-## Use
+## Subcommands
+
+```
+earshot-linux doctor
+  Check PipeWire / wireplumber / pactl presence and the filter-chain
+  module. Prints a status table; exits non-zero if anything's missing.
+
+earshot-linux install <ParametricEQ.txt>
+  Generate the filter-chain config and reload PipeWire.
+
+earshot-linux headphone <query>
+  Search the bundled AutoEQ catalog (oratory1990 + Crinacle, ~2000
+  entries) by name, download the matching ParametricEQ.txt from
+  GitHub, and install it.
+
+earshot-linux list [query]
+  Search/list bundled catalog entries.
+
+earshot-linux print <ParametricEQ.txt>
+  Dump the generated config to stdout without installing it.
+
+earshot-linux status
+  Report whether the Earshot sink is loaded and the current default
+  output sink.
+
+earshot-linux default
+  Set the Earshot sink as the system default output.
+
+earshot-linux remove
+  Remove the config and reload PipeWire. Restores normal audio.
+```
+
+## Typical workflow
 
 ```sh
-# Grab an AutoEQ ParametricEQ.txt for your headphones from
-# https://github.com/jaakkopasanen/AutoEq (or use the bundled snapshot
-# from this repo at Resources/headphones.json - the rawTxtURL field of
-# each entry points at the file). For example:
+# Sanity-check the environment first:
+earshot-linux doctor
 
-curl -L -o ~/Downloads/HD600.txt \
-  'https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results/oratory1990/over-ear/Sennheiser%20HD%20600/Sennheiser%20HD%20600%20ParametricEQ.txt'
+# Pick a headphone from the bundled catalog and apply it:
+earshot-linux headphone 'HD 600'
+earshot-linux default
 
+# ... or, if you already have a ParametricEQ.txt:
 earshot-linux install ~/Downloads/HD600.txt
-```
+earshot-linux default
 
-Then set your output to "Earshot EQ" via your sound settings, or:
+# Verify:
+earshot-linux status
 
-```sh
-pactl set-default-sink earshot.eq
-```
-
-To remove and restore normal audio:
-
-```sh
+# Restore normal audio:
 earshot-linux remove
 ```
 
-To dump the generated config without installing (useful for diffing
-or hand-tweaking):
-
-```sh
-earshot-linux print ~/Downloads/HD600.txt > /tmp/eq.conf
-```
+You can also set the output to "Earshot EQ" via your DE's sound
+settings instead of running `earshot-linux default`.
 
 ## Browsing the AutoEQ catalog
 
-The same `Resources/headphones.json` that the macOS app uses is in this
-repo. Each entry has a `rawTxtURL` pointing at the live ParametricEQ.txt
-in the AutoEQ GitHub repo. You can grep that file for your headphone
-and `curl` the URL.
+The same `Resources/headphones.json` that the macOS app uses ships
+with this repo. The `list` and `headphone` subcommands read it from
+(in order):
 
-If you find yourself doing this often, `Tools/refresh-headphones.sh`
-regenerates the catalog from the live AutoEQ tree.
+1. `headphones.json` next to the `earshot-linux` script.
+2. `../Resources/headphones.json` (the repo layout).
+3. `~/.local/share/earshot/headphones.json`.
+
+If you want to refresh the catalog from the live AutoEQ tree,
+`Tools/refresh-headphones.sh` regenerates it.
 
 ## Limitations
 
 - Single configurable EQ at a time. The PipeWire approach doesn't
   multiplex multiple EQs side-by-side; if you want to switch presets,
-  re-run `install`.
+  re-run `install` (or `headphone <other>`).
 - No live UI for editing bands. Edit the `ParametricEQ.txt` file with
   any text editor and re-run `install`. Or use EasyEffects.
 - No Auto-preamp / clipping protection. You're trusting the AutoEQ

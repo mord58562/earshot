@@ -10,7 +10,6 @@ struct PopoverRoot: View {
     @State private var showingSaveSheet = false
     @State private var renameTarget: EQPreset?
     @State private var showingHeadphoneSearch = false
-    @State private var showingRoomCorrection = false
     @State private var importErrorMessage: String?
     /// Local NSEvent monitor installed while the popover is visible so
     /// Cmd-Z / Cmd-Shift-Z reach the EQ even though we're inside an
@@ -38,7 +37,6 @@ struct PopoverRoot: View {
                            showingSaveSheet: $showingSaveSheet,
                            savePresetName: $savePresetName,
                            showingHeadphoneSearch: $showingHeadphoneSearch,
-                           showingRoomCorrection: $showingRoomCorrection,
                            importErrorMessage: $importErrorMessage)
             }
             .padding(.horizontal, 16)
@@ -72,11 +70,6 @@ struct PopoverRoot: View {
         .sheet(isPresented: $showingHeadphoneSearch) {
             HeadphoneSearchSheet(state: state) {
                 showingHeadphoneSearch = false
-            }
-        }
-        .sheet(isPresented: $showingRoomCorrection) {
-            RoomCorrectionWizard(state: state) {
-                showingRoomCorrection = false
             }
         }
         .alert("Couldn't import", isPresented: Binding(
@@ -726,7 +719,6 @@ private struct ToolbarRow: View {
     @Binding var showingSaveSheet: Bool
     @Binding var savePresetName: String
     @Binding var showingHeadphoneSearch: Bool
-    @Binding var showingRoomCorrection: Bool
     @Binding var importErrorMessage: String?
 
     var body: some View {
@@ -740,14 +732,6 @@ private struct ToolbarRow: View {
             }
             .controlSize(.small)
             .help("Search the bundled AutoEQ headphone catalog")
-
-            Button {
-                showingRoomCorrection = true
-            } label: {
-                Label("Room correction…", systemImage: "waveform.path.ecg")
-            }
-            .controlSize(.small)
-            .help("Fit a corrective EQ to a measured frequency response")
 
             Button {
                 importAutoEQ()

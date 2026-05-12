@@ -48,20 +48,21 @@ and every sound your Mac plays runs through the EQ on its way out.
 
 ## Installing
 
-Install BlackHole 2ch first (one-time):
-
-```sh
-brew install blackhole-2ch
-```
-
-Then build and install Earshot:
+One command:
 
 ```sh
 git clone https://github.com/mord58562/earshot.git
 cd earshot
-./build.sh
-cp -R Earshot.app /Applications/
+./install.sh
 ```
+
+`install.sh` checks for [BlackHole 2ch](https://existential.audio/blackhole/)
+(the free open-source virtual loopback driver Earshot uses to capture
+system audio) and installs it via Homebrew if it's missing, then builds
+Earshot, copies the app into `/Applications/`, and launches it.
+
+If you don't have Homebrew, install BlackHole manually from
+https://existential.audio/blackhole/ and re-run `./install.sh`.
 
 The build is ad-hoc-signed with hardened runtime. On first launch macOS may
 need a right-click → Open to bypass Gatekeeper.

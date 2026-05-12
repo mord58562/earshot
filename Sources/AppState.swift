@@ -951,32 +951,6 @@ final class AppState: ObservableObject {
         persist()
     }
 
-    /// Save a fitted-from-curve preset and load it. Used by the room
-    /// correction wizard once it's solved a set of bands against a
-    /// target. Bypasses the "this is the current working EQ" path so
-    /// the working EQ isn't dirtied by intermediate fitting attempts.
-    func commitFittedPreset(name: String, bands: [EQBand], preampDB: Float) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalName = trimmed.isEmpty ? "Room correction" : trimmed
-        let preset = EQPreset(
-            id: UUID(),
-            name: finalName,
-            preampDB: preampDB,
-            bands: bands.map {
-                EQBand(id: UUID(), type: $0.type,
-                       frequency: $0.frequency, gain: $0.gain,
-                       q: $0.q, bypass: $0.bypass)
-            })
-        recordUndoSnapshot()
-        presets.append(preset)
-        loadedPresetID = preset.id
-        workingPreamp = preset.preampDB
-        workingBands = preset.bands
-        Storage.savePresets(presets)
-        if eqEnabled { reapplyEQ() }
-        persist()
-    }
-
     /// Save the current working EQ under `name` as a new preset.
     func saveCurrentAsNewPreset(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
