@@ -3,6 +3,19 @@
 A macOS menubar parametric EQ. Pick an output device, drop a few bands,
 and every sound your Mac plays runs through the EQ on its way out.
 
+## Screenshots
+
+![EQ bands editor](docs/screenshots/01-eq-bands-expanded.png)
+
+*Drag dots on the curve to shape the EQ. The hovered dot shows freq, dB, and Q.*
+
+| | |
+|---|---|
+| ![Collapsed view](docs/screenshots/03-collapsed.png) | ![Preset search](docs/screenshots/02-preset-search.png) |
+| Day-to-day surface: curve + presets. | Search the bundled ~2000-entry AutoEQ catalog. |
+| ![Auto preamp tracking](docs/screenshots/04-preamp-meter-active.png) | ![Speaker output](docs/screenshots/05-speaker-output.png) |
+| Auto-preamp tracking live levels. | Routing to MacBook speakers instead of headphones. |
+
 ## What's new in 1.0.2
 
 - Fixed a long-session glitch where the engine watchdog's recovery path
