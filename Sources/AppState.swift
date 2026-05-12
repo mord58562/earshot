@@ -575,6 +575,7 @@ final class AppState: ObservableObject {
             if wasRunning {
                 stopEngineOnQueue(reason: "user toggled EQ off")
             }
+            restoreSystemOutputIfHijacked()
         }
         persist()
     }

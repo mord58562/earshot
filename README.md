@@ -3,6 +3,14 @@
 A macOS menubar parametric EQ. Pick an output device, drop a few bands,
 and every sound your Mac plays runs through the EQ on its way out.
 
+## What's new in 1.0.1
+
+- Toggling EQ off via the popover now restores the system default
+  output to your real device. Previously it stopped the engine but left
+  the system default pointed at BlackHole 2ch, so audio kept playing
+  into the loopback void and looked like a crash (notably after Rekordbox
+  or another app briefly stalled the input AUHAL).
+
 ## Features
 
 - **Drag-the-curve editor** - bands are dots on the frequency response.
