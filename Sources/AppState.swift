@@ -398,10 +398,16 @@ final class AppState: ObservableObject {
             return
         }
 
-        Log.write("engine recovery: restarting routing")
+        // Force=true is critical: the watchdog only fires when the engine
+        // is wedged but AVAudioEngine.isRunning is still true and neither
+        // device UID has changed. Without force, EQEngine.setRouting()
+        // short-circuits at its "nothing changed" guard and the input
+        // AUHAL never gets rebuilt, so the ring stays empty, the watchdog
+        // fires again, and we burn through the recovery cap doing nothing.
+        Log.write("engine recovery: restarting routing (force)")
         leftLevel = 0
         rightLevel = 0
-        restartRouting()
+        restartRouting(force: true)
     }
 
     /// Drives the smoothed display levels at 30 Hz. Conventional VU
@@ -532,6 +538,25 @@ final class AppState: ObservableObject {
             if firstObservedRingUnderrunAt == 0 {
                 firstObservedRingUnderrunAt = now
             } else if now - firstObservedRingUnderrunAt >= 5.0 {
+                // Before treating this as engine failure, check whether the
+                // system default output has drifted away from BlackHole. When
+                // another audio app launches (Rekordbox is the canonical
+                // case) it can take the system default with it; music apps
+                // follow, stop writing to BlackHole, and our ring drains.
+                // The default-output listener handles this in principle, but
+                // macOS coalesces HAL notifications during another app's
+                // launch and the listener can arrive a full minute late -
+                // long enough for the recovery cap to disable EQ. Polling
+                // directly here restores within ~200 ms with no engine
+                // restart.
+                if let inUID = inputDeviceUID,
+                   let inDev = DeviceCatalog.device(uid: inUID),
+                   DeviceCatalog.currentDefaultOutput() != inDev.id {
+                    Log.write("watchdog: ring empty + default drifted to id=\(DeviceCatalog.currentDefaultOutput()); restoring \(inDev.name) instead of restarting engine")
+                    firstObservedRingUnderrunAt = 0
+                    handleSystemDefaultOutputChanged()
+                    return
+                }
                 Log.write("watchdog: ring buffer empty for \(now - firstObservedRingUnderrunAt)s - recovering")
                 firstObservedRingUnderrunAt = 0
                 handleConfigChange()

@@ -3,6 +3,19 @@
 A macOS menubar parametric EQ. Pick an output device, drop a few bands,
 and every sound your Mac plays runs through the EQ on its way out.
 
+## What's new in 1.0.2
+
+- Fixed a long-session glitch where the engine watchdog's recovery path
+  was a silent no-op. After enough hours the input/output ring would
+  drain to zero, watchdog would try to restart routing, but the restart
+  short-circuited because `AVAudioEngine.isRunning` was still true and
+  neither device UID had changed - so the wedged input AUHAL was never
+  actually rebuilt. After 6 failed attempts the recovery cap fired and
+  EQ silently disabled itself, leaving the menubar icon green but no
+  audio being processed. Recovery now forces a full teardown and
+  rebuild, so transient input stalls heal in ~200 ms instead of
+  cascading into a manual relaunch.
+
 ## What's new in 1.0.1
 
 - Toggling EQ off via the popover now restores the system default
