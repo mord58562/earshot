@@ -75,8 +75,7 @@ CATALOG_CANDIDATES = [
 def parse_autoeq(text):
     """Parse an AutoEQ ParametricEQ.txt into (preamp_db, bands).
 
-    Format reference (output of EQ -> Generic Parametric EQ from AutoEQ
-    and REW):
+    Format reference (output of EQ -> Generic Parametric EQ from AutoEQ):
 
         Preamp: -6.5 dB
         Filter 1: ON PK Fc 105 Hz Gain 4.5 dB Q 0.71
