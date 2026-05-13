@@ -18,8 +18,6 @@ ensure_blackhole() {
     if command -v brew >/dev/null 2>&1; then
         echo "  Installing via Homebrew: brew install blackhole-2ch"
         echo "  (this requires admin privileges - brew may prompt you for your password)"
-        # blackhole-2ch is a cask; in modern Homebrew `brew install` handles
-        # both formulas and casks, so we don't need to specify --cask.
         if brew install blackhole-2ch; then
             echo "  BlackHole 2ch installed."
         else
@@ -40,8 +38,6 @@ ensure_blackhole() {
         return 1
     fi
 
-    # Verify the driver is actually present now. BlackHole sometimes
-    # requires the user to reboot before the HAL plugin loads; warn if so.
     if [ ! -d "$BLACKHOLE_DRIVER" ]; then
         echo
         echo "  BlackHole was installed but the driver hasn't loaded yet."
@@ -56,8 +52,6 @@ ensure_blackhole
 
 echo
 echo "→ Installing Earshot.app to /Applications/"
-# Stop any running Earshot before replacing the bundle, otherwise the
-# overwrite leaves an open file handle pointing at the old binary.
 pkill -f "Earshot.app/Contents/MacOS/Earshot" 2>/dev/null || true
 rm -rf /Applications/Earshot.app
 cp -R Earshot.app /Applications/Earshot.app

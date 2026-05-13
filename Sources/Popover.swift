@@ -131,6 +131,40 @@ struct PopoverRoot: View {
     }
 }
 
+// MARK: - Painted switch
+
+/// Pure-SwiftUI replacement for `Toggle(.switch)`. Renders a pill +
+/// knob in the accent color; matches the popover's hand-drawn chrome
+/// more closely than the native macOS NSSwitch.
+private struct PaintedSwitch: View {
+    @Binding var isOn: Bool
+    var tint: Color
+    var width: CGFloat = 36
+    var height: CGFloat = 20
+
+    var body: some View {
+        let knobInset: CGFloat = 2
+        let knobSize = height - knobInset * 2
+        let travel = width - knobSize - knobInset * 2
+
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(Color.secondary.opacity(0.35)))
+                .frame(width: width, height: height)
+
+            Circle()
+                .fill(Color.white)
+                .frame(width: knobSize, height: knobSize)
+                .shadow(color: .black.opacity(0.22), radius: 1.2, x: 0, y: 0.5)
+                .offset(x: knobInset + (isOn ? travel : 0))
+        }
+        .frame(width: width, height: height)
+        .contentShape(Rectangle())
+        .animation(.spring(response: 0.22, dampingFraction: 0.85), value: isOn)
+        .onTapGesture { isOn.toggle() }
+    }
+}
+
 // MARK: - Header
 
 private struct HeaderBar: View {
@@ -182,6 +216,10 @@ private struct HeaderBar: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .buttonStyle(.borderless)
+                // Override the inherited orange tint so the device
+                // name reads as standard primary text in both themes -
+                // matches the white-ish look of the default popover.
+                .tint(.primary)
                 .layoutPriority(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,7 +243,7 @@ private struct HeaderBar: View {
                 // a volume/mute icon and was ambiguous about its function.
                 Image(systemName: "hifispeaker.fill")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(state.bypassMode ? Color.accentColor : .secondary)
+                    .foregroundStyle(state.bypassMode ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
@@ -214,18 +252,13 @@ private struct HeaderBar: View {
                   ? "Bypass on - click to return to EQ"
                   : "Bypass: route audio to built-in speakers with no EQ")
 
-            // Toggle is "Earshot active" - shows ON for either EQ or
-            // bypass mode, since both have the engine running. Off fully
-            // disables Earshot. Explicit `.tint(.accentColor)` because
-            // the default macOS switch tint was intermittently rendering
-            // grey when other parts of the view rebuilt during a state
-            // transition - hard-binding the on-color keeps it reliable.
-            Toggle("", isOn: Binding(
-                get: { state.eqEnabled || state.bypassMode },
-                set: { state.setEQEnabled($0) }))
-            .toggleStyle(.switch)
-            .tint(.accentColor)
-            .labelsHidden()
+            // "Earshot active" switch. Hand-drawn (PaintedSwitch) to
+            // sit cleanly inside the popover's hand-drawn chrome.
+            PaintedSwitch(
+                isOn: Binding(
+                    get: { state.eqEnabled || state.bypassMode },
+                    set: { state.setEQEnabled($0) }),
+                tint: Color.accentColor)
             .help(state.eqEnabled || state.bypassMode ? "On (turn off to fully disable Earshot)" : "Off (Earshot is not intercepting audio)")
         }
         .padding(.horizontal, 16)
@@ -377,6 +410,7 @@ private struct HeroCurveView: View {
 private struct CurveLayer: View {
     let bands: [EQBand]
     let preamp: Float
+    var accent: Color = .accentColor
 
     var body: some View {
         Canvas { ctx, size in
@@ -391,8 +425,8 @@ private struct CurveLayer: View {
             fill.addLine(to: CGPoint(x: size.width, y: size.height))
             fill.closeSubpath()
             ctx.fill(fill, with: .linearGradient(
-                Gradient(colors: [Color.accentColor.opacity(0.22),
-                                  Color.accentColor.opacity(0.0)]),
+                Gradient(colors: [accent.opacity(0.22),
+                                  accent.opacity(0.0)]),
                 startPoint: CGPoint(x: size.width / 2, y: 0),
                 endPoint: CGPoint(x: size.width / 2, y: size.height)))
 
@@ -400,7 +434,7 @@ private struct CurveLayer: View {
             stroke.move(to: first)
             for pt in pts.dropFirst() { stroke.addLine(to: pt) }
             ctx.stroke(stroke, with: .linearGradient(
-                Gradient(colors: [Color.accentColor.opacity(0.95), Color.accentColor]),
+                Gradient(colors: [accent.opacity(0.95), accent]),
                 startPoint: CGPoint(x: 0, y: size.height / 2),
                 endPoint: CGPoint(x: size.width, y: size.height / 2)),
                 style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
@@ -968,7 +1002,8 @@ private struct EQCurveView: View {
                 // and stroke paths re-tessellate on every gesture event.
                 CurveLayer(
                     bands: state.workingBands,
-                    preamp: state.workingPreamp)
+                    preamp: state.workingPreamp,
+                    accent: Color.accentColor)
 
                 // Interactive dots only when the parent view enables it.
                 // Drawn above the curve so the user can grab a band even
@@ -1380,6 +1415,15 @@ private struct StereoMeter: View {
         }
     }
 
+    private var fillStops: [Gradient.Stop] {
+        [
+            .init(color: Color.accentColor, location: 0.00),
+            .init(color: Color.accentColor, location: 0.70),
+            .init(color: .orange,           location: 0.90),
+            .init(color: .red,              location: 1.00),
+        ]
+    }
+
     private func meterBar(level: Float, peak: Float) -> some View {
         GeometryReader { geo in
             let total = geo.size.width
@@ -1410,12 +1454,7 @@ private struct StereoMeter: View {
                 // rest of the popover chrome.
                 RoundedRectangle(cornerRadius: 2)
                     .fill(LinearGradient(
-                        stops: [
-                            .init(color: Color.accentColor, location: 0.00),
-                            .init(color: Color.accentColor, location: 0.70),
-                            .init(color: .orange,           location: 0.90),
-                            .init(color: .red,              location: 1.00),
-                        ],
+                        stops: fillStops,
                         startPoint: .leading, endPoint: .trailing))
                     .frame(width: total)
                     .mask(alignment: .leading) {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Earshot.app
+# Build Earshot.app.
 set -euo pipefail
 
 cd "$(dirname "$0")"

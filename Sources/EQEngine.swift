@@ -85,9 +85,9 @@ final class EQEngine: @unchecked Sendable {
 
     // MARK: - Public API
 
-    func setRouting(outputUID: String, sampleRate: Double? = nil, force: Bool = false) throws {
-        let inputUID = Self.findBlackHoleUID()
-        guard let inputUID = inputUID else {
+    func setRouting(outputUID: String,
+                    sampleRate: Double? = nil, force: Bool = false) throws {
+        guard let inputUID = Self.findBlackHoleUID() else {
             throw NSError(domain: "EQEngine", code: -1,
                           userInfo: [NSLocalizedDescriptionKey:
                             "BlackHole 2ch isn't installed. Earshot needs a virtual loopback driver to capture system audio. Install from existential.audio/blackhole."])

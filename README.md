@@ -16,26 +16,28 @@ and every sound your Mac plays runs through the EQ on its way out.
 | ![Auto preamp tracking](docs/screenshots/04-preamp-meter-active.png) | ![Speaker output](docs/screenshots/05-speaker-output.png) |
 | Auto-preamp tracking live levels. | Routing to MacBook speakers instead of headphones. |
 
-## What's new in 1.0.2
-
-- Fixed a long-session glitch where the engine watchdog's recovery path
-  was a silent no-op. After enough hours the input/output ring would
-  drain to zero, watchdog would try to restart routing, but the restart
-  short-circuited because `AVAudioEngine.isRunning` was still true and
-  neither device UID had changed - so the wedged input AUHAL was never
-  actually rebuilt. After 6 failed attempts the recovery cap fired and
-  EQ silently disabled itself, leaving the menubar icon green but no
-  audio being processed. Recovery now forces a full teardown and
-  rebuild, so transient input stalls heal in ~200 ms instead of
-  cascading into a manual relaunch.
-
 ## What's new in 1.0.1
 
-- Toggling EQ off via the popover now restores the system default
-  output to your real device. Previously it stopped the engine but left
-  the system default pointed at BlackHole 2ch, so audio kept playing
-  into the loopback void and looked like a crash (notably after Rekordbox
-  or another app briefly stalled the input AUHAL).
+- **Prebuilt download.** Grab `Earshot.app.zip` from
+  [Releases](https://github.com/mord58562/earshot/releases) and drag the
+  app into `/Applications/` - no Terminal, no build step. The bundle is
+  ad-hoc signed, so the first launch needs one Gatekeeper override
+  (see [Installing](#installing) below).
+- **Bypass-toggle hang fix.** Flipping bypass on/off in quick succession
+  used to wedge CoreAudio mid-teardown and stop responding. The exit
+  path now does a single atomic re-routing instead of stop-then-restart,
+  so the engine rebuilds exactly once per click.
+- **Long-session recovery fix.** The engine watchdog's restart used to
+  short-circuit because `AVAudioEngine.isRunning` was still true and
+  neither device UID had changed, so the wedged input AUHAL was never
+  rebuilt - eventually EQ would silently disable itself and you'd hear
+  nothing. Recovery now forces a full teardown and rebuild; transient
+  input stalls heal in ~200 ms.
+- **System default restored on EQ off.** Toggling EQ off used to stop
+  the engine but leave the system default pointed at BlackHole 2ch, so
+  audio kept playing into the loopback void and looked like a crash.
+  Disabling EQ now puts the system default back to your real output
+  device.
 
 ## Features
 
@@ -75,14 +77,49 @@ and every sound your Mac plays runs through the EQ on its way out.
 - Apple Silicon (arm64)
 - [BlackHole 2ch](https://existential.audio/blackhole/) installed (free,
   MIT-licensed). Earshot reads system audio out of BlackHole as a
-  virtual loopback. Apple shipped a Process Tap API in macOS 14.4 that
-  would in theory replace the BlackHole route, but it needs a paid
-  Developer ID and entitlements I'm not paying for, so this build sticks
-  with BlackHole.
+  virtual loopback.
 
 ## Installing
 
-One command:
+Two paths, pick whichever you prefer.
+
+### Option A — Prebuilt download (no Terminal)
+
+1. **Install BlackHole 2ch first.** Earshot won't capture audio without
+   it. Either run `brew install blackhole-2ch` once, or download the
+   installer from [existential.audio/blackhole](https://existential.audio/blackhole/)
+   and run it. A reboot after install is sometimes needed before macOS
+   sees the new driver.
+2. **Download `Earshot.app.zip`** from the [latest release](https://github.com/mord58562/earshot/releases/latest).
+3. **Unzip** it (Finder does this on double-click) and drag
+   `Earshot.app` into `/Applications/`.
+4. **First launch — Gatekeeper.** This build is ad-hoc signed (no Apple
+   Developer ID — notarisation costs $99/year and this is a hobby
+   project), so the first time you open it macOS will refuse with one
+   of:
+   - "Earshot can't be opened because Apple cannot check it for
+     malicious software."
+   - "macOS cannot verify that this app is free from malware."
+
+   Two equivalent ways past it, one-time per binary:
+
+   - **Right-click → Open.** Right-click (Control-click) `Earshot.app`
+     in `/Applications`, pick **Open**, then click **Open** in the
+     dialog. macOS remembers the approval; future launches are silent.
+   - **System Settings.** If macOS won't show an Open button at all
+     (newer macOS releases hide it on the first attempt), go to
+     **System Settings → Privacy & Security**, scroll down to a row
+     reading something like *"Earshot was blocked from use because it
+     is not from an identified developer"*, and click **Open Anyway**.
+
+   If you'd rather inspect the binary before trusting it, the full
+   source is in this repo's `Sources/` directory and the build is fully
+   reproducible from `./build.sh`.
+
+After first launch the menubar glyph appears and Earshot stays running
+until you quit it via Cmd-Q.
+
+### Option B — Build from source (one shell command)
 
 ```sh
 git clone https://github.com/mord58562/earshot.git
@@ -90,20 +127,17 @@ cd earshot
 ./install.sh
 ```
 
-`install.sh` checks for [BlackHole 2ch](https://existential.audio/blackhole/)
-(the free open-source virtual loopback driver Earshot uses to capture
-system audio) and installs it via Homebrew if it's missing, then builds
-Earshot, copies the app into `/Applications/`, and launches it.
+`install.sh` checks for BlackHole 2ch (installs it via Homebrew if
+missing, or prints the manual download link if Homebrew isn't on the
+machine), runs `build.sh`, copies `Earshot.app` into `/Applications/`,
+and launches it. The same Gatekeeper override may still apply on first
+launch — see the right-click / System Settings instructions above.
 
-If you don't have Homebrew, install BlackHole manually from
-https://existential.audio/blackhole/ and re-run `./install.sh`.
+### Launch at login
 
-The build is ad-hoc-signed with hardened runtime. On first launch macOS may
-need a right-click → Open to bypass Gatekeeper.
-
-To launch at login: System Settings → General → Login Items → click `+`
-and add `Earshot.app`. Earshot also auto-registers as a login item on first
-launch via `SMAppService`.
+System Settings → General → Login Items → click `+` and add
+`Earshot.app`. Earshot also auto-registers as a login item on first
+launch via `SMAppService`, so this is usually already done for you.
 
 ## Using it
 
@@ -155,6 +189,11 @@ those tools the same way.
 
 `~/Library/Logs/Earshot/Earshot.log`. Rotates at ~512 KB.
 
+## Changelog
+
+Older release notes live on the
+[GitHub Releases page](https://github.com/mord58562/earshot/releases).
+
 ## License
 
 MIT - see [LICENSE](LICENSE).
@@ -164,11 +203,15 @@ MIT - see [LICENSE](LICENSE).
 - **BlackHole 2ch** by Existential Audio (https://existential.audio/blackhole/)
   - Required runtime dependency. Not bundled. Users install separately. MIT-licensed.
 - **AutoEQ** by Jaakko Pasanen (https://github.com/jaakkopasanen/AutoEQ)
-  - The "Find a preset" feature browses AutoEQ's published oratory1990
-    measurements and downloads their `ParametricEQ.txt` files on demand.
-    Earshot bundles a small index of URLs; the underlying measurement data
-    is not included in this repository. AutoEQ is MIT-licensed.
-- **oratory1990** measurements published as part of AutoEQ.
+  - The "Find a preset" feature browses AutoEQ's published `ParametricEQ.txt`
+    files on demand. Earshot bundles a small index of URLs; the underlying
+    measurement data is not included in this repository. AutoEQ is
+    MIT-licensed.
+- **oratory1990** headphone measurements, published as part of AutoEQ
+  under CC BY-NC-SA 4.0. Source: https://www.reddit.com/r/oratory1990/.
+- **Crinacle** headphone measurements (in-ear and over-ear), accessed
+  through AutoEQ's mirror. Originals at https://crinacle.com/. Used as
+  reference points; Earshot bundles only URLs to the measurement files.
 - **TPCircularBuffer** by Michael Tyson / A Tasty Pixel
   (https://github.com/michaeltyson/TPCircularBuffer) — the lock-free SPSC
   ring buffer that hands audio frames from the input AUHAL to the output

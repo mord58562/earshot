@@ -671,16 +671,16 @@ final class AppState: ObservableObject {
     }
 
     /// Leave bypass and restore whatever state Earshot was in when bypass
-    /// was turned on - the output device and the EQ-on/off flag. Previously
-    /// this forced eqEnabled=true unconditionally, which:
-    ///   - wrong-behaviorised bypass-from-EQ-off (came back as EQ on)
-    ///   - crashed in CoreAudio because the engine had just stopped on
-    ///     the routing queue and immediately had to start again with the
-    ///     bypass-routed system default still active.
-    /// Now: stop the engine on the routing queue, restore the prior
-    /// output device, then either restart (prior state was on) or leave
-    /// the engine stopped (prior state was off). All engine.* ops on the
-    /// single queue means no two concurrent configuration paths.
+    /// was turned on - the output device and the EQ-on/off flag.
+    ///
+    /// Earlier this routed through TWO separate routing-queue dispatches
+    /// (a bare `engine.stop()`, then `startRouting()` from its completion
+    /// which itself does another stop+startInternal). The doubled
+    /// tear-down/rebuild of the AVAudioEngine + AUHAL within ~10 ms is
+    /// what wedged CoreAudio on rapid bypass-toggle: the second
+    /// EQEngine.stop() entered and never completed. Funnel everything
+    /// through a single setRouting call instead — same shape as
+    /// enableBypass — so the engine is rebuilt exactly once per click.
     func exitBypass() {
         if isApplyingRouting { return }
         let target: String? = {
@@ -693,33 +693,23 @@ final class AppState: ObservableObject {
         let restoreEnabled = preBypassEQEnabled
         preBypassOutputUID = nil
 
-        let engine = self.engine
-        isApplyingRouting = true
-        routingQueue.async { [weak self] in
-            engine.stop()
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    guard let self = self else { return }
-                    self.isApplyingRouting = false
-                    if let target = target {
-                        self.outputDeviceUID = target
-                        Log.write("exitBypass: restoring output to \(target)")
-                    }
-                    self.bypassMode = false
-                    self.eqEnabled = restoreEnabled
-                    if restoreEnabled {
-                        self.startRouting()
-                    } else {
-                        // EQ was off before bypass - leave engine stopped
-                        // and let macOS route normally through the real
-                        // output device. We already called engine.stop()
-                        // above so there's nothing more to do here.
-                        self.restoreSystemOutputIfHijacked()
-                    }
-                    self.persist()
-                }
-            }
+        if let target = target {
+            outputDeviceUID = target
+            Log.write("exitBypass: restoring output to \(target)")
         }
+        bypassMode = false
+        eqEnabled = restoreEnabled
+        if restoreEnabled {
+            // setRouting does stop+startInternal atomically on the
+            // routing queue; one dispatch, no race window.
+            startRouting()
+        } else {
+            // EQ was off before bypass - stop the engine and restore
+            // whatever system default was in place pre-EQ.
+            stopEngineOnQueue(reason: "exit bypass to EQ-off")
+            restoreSystemOutputIfHijacked()
+        }
+        persist()
     }
 
     func setOutputDevice(uid: String) {
@@ -1035,6 +1025,7 @@ final class AppState: ObservableObject {
             persist()
             return
         }
+
         // BlackHole pipeline needs system default = BlackHole so apps
         // write where we capture. Save the prior default so we can put it
         // back when the user toggles off.
@@ -1052,7 +1043,8 @@ final class AppState: ObservableObject {
         let bands = effectiveBands()
         let preserveIntent = isLaunchActivation
         isLaunchActivation = false
-        applyRoutingOffMain(outUID: outUID, preamp: preamp, bands: bands,
+        applyRoutingOffMain(outUID: outUID,
+                            preamp: preamp, bands: bands,
                             successLogContext: "EQ enabled out=\(outDev.name)",
                             failureRecovery: { [weak self] in
             guard let self = self else { return }
@@ -1094,14 +1086,9 @@ final class AppState: ObservableObject {
 
     private func restartRouting(force: Bool = false) {
         guard let outUID = outputDeviceUID else { return }
-        let preamp = workingPreamp
-        let bands = effectiveBands()
-        applyRoutingOffMain(outUID: outUID, preamp: preamp, bands: bands,
-                            successLogContext: "engine re-routed",
-                            force: force,
-                            failureRecovery: { [weak self] in
-            self?.disableEQ(restoreSystemOutput: true)
-        })
+        _ = force
+        _ = outUID
+        startRouting()
     }
 
     private let routingQueue = DispatchQueue(label: "com.mord58562.Earshot.routing", qos: .userInitiated)
