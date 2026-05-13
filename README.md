@@ -160,12 +160,61 @@ There's a Linux CLI in [`linux/`](linux/) that does the most useful piece
 of what Earshot does on macOS: take an AutoEQ `ParametricEQ.txt` and
 apply it system-wide. It generates a PipeWire `filter-chain` config that
 creates a virtual sink called `Earshot EQ`; anything you route to that
-sink gets the EQ and forwards to your real default output.
+sink gets the EQ and forwards to your real default output. No daemon,
+no GUI, no build step.
 
-No GUI on Linux - if you want one, install
+**Requirements:** PipeWire >= 0.3.60 (filter-chain module is stable from
+there) and Python 3.8+. Most current distros ship both by default.
+
+**Install:**
+
+```sh
+git clone https://github.com/mord58562/earshot.git
+cd earshot
+
+# CLI on $PATH
+install -Dm755 linux/earshot-linux ~/.local/bin/earshot-linux
+
+# Bundled ~2000-entry headphone catalog (oratory1990 + Crinacle) so
+# `earshot-linux headphone` and `earshot-linux list` work offline
+install -Dm644 Resources/headphones.json ~/.local/share/earshot/headphones.json
+```
+
+Make sure `~/.local/bin` is on your `$PATH`.
+
+**Verify the stack** (PipeWire, wireplumber, filter-chain module,
+pactl):
+
+```sh
+earshot-linux doctor
+```
+
+**Apply a preset** — either a file you already have, or one looked up
+by name from the bundled AutoEQ catalog:
+
+```sh
+earshot-linux install ~/Downloads/HD600_ParametricEQ.txt   # from a file
+earshot-linux headphone "HD 600"                            # from the catalog
+```
+
+Either command writes a config to
+`~/.config/pipewire/pipewire.conf.d/` and reloads PipeWire. After that,
+route any app's audio to the `Earshot EQ` sink (via `pavucontrol`,
+EasyEffects, or whatever sink-picker your DE provides) and you get the
+EQ on the way out to your real default output.
+
+**Uninstall:**
+
+```sh
+rm ~/.config/pipewire/pipewire.conf.d/earshot-eq.conf
+systemctl --user restart pipewire
+rm ~/.local/bin/earshot-linux ~/.local/share/earshot/headphones.json
+```
+
+If you'd rather have a graphical equaliser, install
 [EasyEffects](https://github.com/wwmm/easyeffects) and import the same
-`ParametricEQ.txt` manually. See [`linux/README.md`](linux/README.md)
-for the install + usage.
+`ParametricEQ.txt` manually — the file format is portable. Full Linux
+CLI reference: [`linux/README.md`](linux/README.md).
 
 ## File formats
 
