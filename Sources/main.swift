@@ -39,6 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.delegate = self
         observeStateForGlyph()
         registerAsLoginItem()
+        // Onboarding is shown as a standalone window (not a sheet inside
+        // the transient popover) so it doesn't compete with the popover's
+        // focus-loss-closes-it behaviour. Deferred one runloop tick so
+        // the menubar item is fully wired and the popover can be opened
+        // while the onboarding window is visible.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            Onboarding.showIfNeeded(state: self.state)
+        }
         Log.write("Earshot launched. Loopback installed: \(state.preferredLoopbackInstalled)")
     }
 

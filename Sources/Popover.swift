@@ -12,7 +12,6 @@ struct PopoverRoot: View {
     @State private var showingHeadphoneSearch = false
     @State private var importErrorMessage: String?
     @State private var inspectorTarget: BandTarget?
-    @State private var showingOnboarding = false
     /// Local NSEvent monitor installed while the popover is visible so
     /// Cmd-Z / Cmd-Shift-Z reach the EQ even though we're inside an
     /// NSPopover (which doesn't forward to the standard responder chain).
@@ -80,9 +79,6 @@ struct PopoverRoot: View {
                 inspectorTarget = nil
             }
         }
-        .sheet(isPresented: $showingOnboarding) {
-            OnboardingSheet(state: state) { showingOnboarding = false }
-        }
         .alert("Couldn't import", isPresented: Binding(
             get: { importErrorMessage != nil },
             set: { if !$0 { importErrorMessage = nil } })) {
@@ -90,10 +86,7 @@ struct PopoverRoot: View {
         } message: {
             Text(importErrorMessage ?? "")
         }
-        .onAppear {
-            installKeyMonitor()
-            if Onboarding.shouldShow() { showingOnboarding = true }
-        }
+        .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
     }
 
