@@ -2,6 +2,7 @@ import Cocoa
 import SwiftUI
 import AVFoundation
 import ServiceManagement
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -12,13 +13,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var hostingController: NSHostingController<PopoverRoot>!
     private var lastClickTime: CFTimeInterval = 0
     private var includeOToole = false
+    private var stateObservers: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = MenubarGlyph.image()
+            button.image = MenubarGlyph.image(for: currentGlyphState())
             button.target = self
             button.action = #selector(handleStatusClick(_:))
             // Default action mask = left mouse up. Listen to right mouse
@@ -35,8 +37,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = hostingController
         popover.behavior = .transient
         popover.delegate = self
+        observeStateForGlyph()
         registerAsLoginItem()
         Log.write("Earshot launched. Loopback installed: \(state.preferredLoopbackInstalled)")
+    }
+
+    /// Mirror EQ-engine on/off + bypass into the menubar glyph. Three
+    /// drawn variants - off, active, bypass - so the icon tells the
+    /// truth at a glance without needing colour or accent.
+    private func observeStateForGlyph() {
+        state.$eqEnabled
+            .combineLatest(state.$bypassMode)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.statusItem?.button?.image =
+                    MenubarGlyph.image(for: self.currentGlyphState())
+            }
+            .store(in: &stateObservers)
+    }
+
+    private func currentGlyphState() -> MenubarGlyph.State {
+        if state.bypassMode { return .bypass }
+        return state.eqEnabled ? .active : .off
     }
 
     /// Register Earshot to launch at login. Idempotent. Runs off-main so a
@@ -158,6 +181,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let openItem = NSMenuItem(title: "Open Earshot", action: #selector(toggleStatusItemFromMenu), keyEquivalent: "")
         openItem.target = self
         menu.addItem(openItem)
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        let aboutItem = NSMenuItem(title: "About Earshot", action: #selector(openAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Earshot", action: #selector(NSApp.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
@@ -174,6 +203,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc private func toggleStatusItemFromMenu() {
         toggleStatusItem()
+    }
+
+    @objc private func openSettings() {
+        SettingsWindow.show(state: state)
+    }
+
+    @objc private func openAbout() {
+        AboutPanel.show()
     }
 }
 

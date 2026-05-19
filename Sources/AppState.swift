@@ -946,9 +946,19 @@ final class AppState: ObservableObject {
     }
 
     func addBand() {
+        addBand(at: 1000, gain: 0)
+    }
+
+    /// Spawn a parametric band anchored to a specific frequency and gain.
+    /// Used by click-on-empty-canvas; falls through to the default
+    /// 1 kHz / 0 dB band when called without args.
+    func addBand(at frequency: Float, gain: Float) {
         guard workingBands.count < EQEngine.maxBands else { return }
         recordUndoSnapshot()
-        workingBands.append(EQBand.defaultPeak)
+        let q: Float = 1.0
+        let f = max(20, min(22000, frequency))
+        let g = max(-24, min(24, gain))
+        workingBands.append(EQBand(type: .parametric, frequency: f, gain: g, q: q))
         loadedPresetID = nil
         reapplyEQ()
         persist()

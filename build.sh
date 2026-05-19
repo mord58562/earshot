@@ -34,6 +34,8 @@ SOURCES=(
   Sources/HeadphoneIndex.swift
   Sources/AppState.swift
   Sources/Icon.swift
+  Sources/Settings.swift
+  Sources/Onboarding.swift
   Sources/Popover.swift
   Sources/main.swift
 )

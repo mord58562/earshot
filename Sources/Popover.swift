@@ -11,6 +11,8 @@ struct PopoverRoot: View {
     @State private var renameTarget: EQPreset?
     @State private var showingHeadphoneSearch = false
     @State private var importErrorMessage: String?
+    @State private var inspectorTarget: BandTarget?
+    @State private var showingOnboarding = false
     /// Local NSEvent monitor installed while the popover is visible so
     /// Cmd-Z / Cmd-Shift-Z reach the EQ even though we're inside an
     /// NSPopover (which doesn't forward to the standard responder chain).
@@ -26,7 +28,8 @@ struct PopoverRoot: View {
                 Divider().opacity(0.18)
 
                 if isExpanded {
-                    EQEditor(state: state, isExpanded: $isExpanded)
+                    EQEditor(state: state, isExpanded: $isExpanded,
+                             inspectorTarget: $inspectorTarget)
                 } else {
                     HeroCurveView(state: state, isExpanded: $isExpanded)
                 }
@@ -72,6 +75,14 @@ struct PopoverRoot: View {
                 showingHeadphoneSearch = false
             }
         }
+        .sheet(item: $inspectorTarget) { target in
+            BandInspectorSheet(state: state, bandID: target.id) {
+                inspectorTarget = nil
+            }
+        }
+        .sheet(isPresented: $showingOnboarding) {
+            OnboardingSheet(state: state) { showingOnboarding = false }
+        }
         .alert("Couldn't import", isPresented: Binding(
             get: { importErrorMessage != nil },
             set: { if !$0 { importErrorMessage = nil } })) {
@@ -79,7 +90,10 @@ struct PopoverRoot: View {
         } message: {
             Text(importErrorMessage ?? "")
         }
-        .onAppear { installKeyMonitor() }
+        .onAppear {
+            installKeyMonitor()
+            if Onboarding.shouldShow() { showingOnboarding = true }
+        }
         .onDisappear { removeKeyMonitor() }
     }
 
@@ -97,6 +111,9 @@ struct PopoverRoot: View {
                 if mods.contains(.shift) { state.redo() }
                 else                     { state.undo() }
                 return nil
+            case ",":
+                SettingsWindow.show(state: state)
+                return nil
             case "q":
                 // Cmd-Q only fires while Earshot's popover window is key,
                 // not while another app is focused. First press warns;
@@ -108,7 +125,7 @@ struct PopoverRoot: View {
                 } else {
                     let alert = NSAlert()
                     alert.messageText = "Quit Earshot?"
-                    alert.informativeText = "Quitting will disable EQ until you reopen the app. Earshot lives in the menubar — closing the popover doesn't quit it."
+                    alert.informativeText = "Earshot lives in the menubar - closing the popover doesn't quit it."
                     alert.addButton(withTitle: "Quit")
                     alert.addButton(withTitle: "Cancel")
                     if alert.runModal() == .alertFirstButtonReturn {
@@ -450,7 +467,6 @@ private struct EditBandsChip: View {
             Label("Edit bands", systemImage: "slider.horizontal.3")
         }
         .controlSize(.small)
-        .help("Open the band editor")
     }
 }
 
@@ -461,7 +477,6 @@ private struct CollapseChip: View {
             Label("Done", systemImage: "chevron.up")
         }
         .controlSize(.small)
-        .help("Hide the band editor")
     }
 }
 
@@ -470,11 +485,13 @@ private struct CollapseChip: View {
 private struct EQEditor: View {
     @ObservedObject var state: AppState
     @Binding var isExpanded: Bool
+    @Binding var inspectorTarget: BandTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack(alignment: .topTrailing) {
-                EQCurveView(state: state, interactive: true)
+                EQCurveView(state: state, interactive: true,
+                            inspectorTarget: $inspectorTarget)
                     .frame(height: 132)
                 CollapseChip {
                     withAnimation(.smooth(duration: 0.18)) { isExpanded = false }
@@ -482,6 +499,7 @@ private struct EQEditor: View {
                 .padding(8)
             }
             FrequencyAxis()
+            ModifierKeyHints()
             BandList(state: state)
             HStack(spacing: 8) {
                 Button {
@@ -505,6 +523,34 @@ private struct EQEditor: View {
                     .buttonStyle(.borderless)
                 }
             }
+        }
+    }
+}
+
+/// Quiet hint row right below the frequency axis. Surfaces the modifier-
+/// key interactions (axis locks, scroll-Q, double-click reset, click-empty
+/// to spawn) without an onboarding tour. Tertiary text, no chrome.
+private struct ModifierKeyHints: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            hint(key: "⇧",      label: "lock Hz")
+            hint(key: "⌥",      label: "lock dB")
+            hint(key: "scroll", label: "Q")
+            hint(key: "dbl",    label: "reset")
+            hint(key: "click",  label: "add band")
+            Spacer()
+        }
+        .font(.system(size: 9))
+        .foregroundStyle(.tertiary)
+        .padding(.top, -2)
+    }
+    @ViewBuilder
+    private func hint(key: String, label: String) -> some View {
+        HStack(spacing: 4) {
+            Text(key)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(label)
         }
     }
 }
@@ -756,37 +802,34 @@ private struct ToolbarRow: View {
     @Binding var importErrorMessage: String?
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Icon-only buttons were ambiguous; matching the "Save" button's
-            // icon-plus-label pattern keeps each entry point self-explanatory.
+        HStack(spacing: 6) {
             Button {
                 showingHeadphoneSearch = true
             } label: {
-                Label("Find headphone…", systemImage: "headphones")
+                Label("Headphone", systemImage: "headphones")
             }
             .controlSize(.small)
-            .help("Search the bundled AutoEQ headphone catalog")
+            .keyboardShortcut("f", modifiers: .command)
+            .help("Find a measured headphone preset (⌘F)")
 
             Button {
                 importAutoEQ()
             } label: {
-                Label("Import…", systemImage: "square.and.arrow.down")
+                Label("Import", systemImage: "square.and.arrow.down")
             }
             .controlSize(.small)
-            .help("Load a ParametricEQ.txt file from disk")
+            .help("Load a ParametricEQ.txt file")
 
-            // Export moved to the per-preset menu (... > Export...) so
-            // any preset can be exported, not just the currently loaded
-            // one, and so this row stops re-flowing when the loaded
-            // preset state changes.
             Spacer()
             Button {
                 savePresetName = ""
                 showingSaveSheet = true
             } label: {
-                Label("Save", systemImage: "plus")
+                Label("Save preset", systemImage: "plus")
             }
             .controlSize(.small)
+            .keyboardShortcut("s", modifiers: .command)
+            .help("Save the current EQ as a preset (⌘S)")
         }
     }
 
@@ -963,6 +1006,9 @@ private struct EQCurveView: View {
     /// gestures, no readout. Used in the compact hero view so the menubar
     /// popover stays uncluttered.
     var interactive: Bool = true
+    /// Optional binding to the numeric-inspector target. Only the editor
+    /// passes one through; the compact hero view doesn't need it.
+    var inspectorTarget: Binding<BandTarget?>? = nil
 
     @State private var hoveredBandID: UUID? = nil
     @State private var draggingBandID: UUID? = nil
@@ -1057,7 +1103,7 @@ private struct EQCurveView: View {
                                     viewSize: geo.size, radius: 8)
                                 hoveredBandID = hit?.id
                                 if hit != nil { NSCursor.pointingHand.set() }
-                                else          { NSCursor.arrow.set() }
+                                else          { NSCursor.crosshair.set() }
                             case .ended:
                                 hoveredBandID = nil
                                 NSCursor.arrow.set()
@@ -1072,17 +1118,22 @@ private struct EQCurveView: View {
                                 state.updateBand(id: id) { $0.gain = 0 }
                             }
                         }
+                        .background(
+                            ScrollWheelCatcher(
+                                onScroll: { dy in handleScroll(dy, bands: bands) })
+                        )
 
-                    // Readout shows on hover OR drag - same trigger as the
-                    // hand cursor (both fire from .onContinuousHover above,
-                    // which is reliable, so the stale-text problem from
-                    // earlier per-dot .onHover isn't a concern here).
+                    // Readout shows on hover OR drag, anchored just above
+                    // the active dot (clamped to the canvas so it never
+                    // walks off screen). Cursor-adjacent placement is the
+                    // norm in pro EQs — eyes are already on the dot.
                     if let id = draggingBandID ?? hoveredBandID,
                        let band = bands.first(where: { $0.id == id }) {
+                        let pt = EQCurveView.pointForBand(band, viewSize: geo.size)
                         tooltip(for: band)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity,
-                                   alignment: .topLeading)
-                            .padding(6)
+                            .fixedSize()
+                            .position(EQCurveView.tooltipPosition(
+                                for: pt, viewSize: geo.size))
                             .allowsHitTesting(false)
                             .transition(.opacity)
                     }
@@ -1114,27 +1165,16 @@ private struct EQCurveView: View {
         let outlineOpacity: Double = isActive ? 1.0 : 0.85
         let outlineWidth: CGFloat = isActive ? 1.4 : 1.0
 
-        let allFull = state.workingBands.count >= EQEngine.maxBands
-
-        if allFull {
-            Image(systemName: "hand.thumbsup.fill")
-                .font(.system(size: dotSize * 1.6, weight: .semibold))
-                .foregroundStyle(dotFill)
-                .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
-                .opacity(band.bypass ? 0.55 : 1)
-                .position(pt)
-        } else {
-            Circle()
-                .fill(dotFill)
-                .overlay(
-                    Circle().strokeBorder(Color.white.opacity(outlineOpacity),
-                                          lineWidth: outlineWidth)
-                )
-                .frame(width: dotSize, height: dotSize)
-                .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
-                .opacity(band.bypass ? 0.55 : 1)
-                .position(pt)
-        }
+        Circle()
+            .fill(dotFill)
+            .overlay(
+                Circle().strokeBorder(Color.white.opacity(outlineOpacity),
+                                      lineWidth: outlineWidth)
+            )
+            .frame(width: dotSize, height: dotSize)
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+            .opacity(band.bypass ? 0.55 : 1)
+            .position(pt)
     }
 
     /// Right-click menu shared by every dot. Operates on the band the
@@ -1162,6 +1202,11 @@ private struct EQCurveView: View {
             Button("Reset gain") {
                 state.updateBand(id: band.id) { $0.gain = 0 }
             }
+            if inspectorTarget != nil {
+                Button("Edit values…") {
+                    inspectorTarget?.wrappedValue = BandTarget(id: band.id)
+                }
+            }
             Divider()
             Button("Remove band", role: .destructive) {
                 state.removeBand(id: band.id)
@@ -1172,8 +1217,9 @@ private struct EQCurveView: View {
     /// Drag handler attached to the interaction layer. On the first event,
     /// uses the press location to find which dot was grabbed (strict 8pt
     /// hit) and captures the anchor; later events apply the translation.
-    /// A press not on any dot is a no-op — no anchor is captured so
-    /// subsequent .onChanged events early-return.
+    /// A press not on any dot, with no meaningful translation by the time
+    /// the gesture ends, is treated as a click on empty canvas — which
+    /// spawns a new parametric band at that freq/gain.
     private func layerDragGesture(bands: [EQBand], viewSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -1210,11 +1256,43 @@ private struct EQCurveView: View {
                     }
                 }
             }
-            .onEnded { _ in
-                if dragAnchor != nil { state.commitBandEdits() }
+            .onEnded { value in
+                if dragAnchor != nil {
+                    state.commitBandEdits()
+                } else {
+                    // No dot was grabbed and the cursor barely moved →
+                    // click on empty canvas spawns a new parametric band
+                    // anchored to that freq/gain. < 3pt squared distance
+                    // is the standard "this was a click, not a drag" cut.
+                    let d = value.translation
+                    let movedSq = d.width * d.width + d.height * d.height
+                    if movedSq < 9, state.workingBands.count < EQEngine.maxBands {
+                        let p = value.startLocation
+                        guard viewSize.width > 0 else { return }
+                        let t = Float(p.x / viewSize.width)
+                        let freq = EQCurveView.freqAt(t: t)
+                        let g = EQCurveView.dbFor(y: p.y, height: viewSize.height)
+                        state.addBand(at: freq, gain: max(-EQCurveView.dbRange,
+                                                          min(EQCurveView.dbRange, g)))
+                    }
+                }
                 dragAnchor = nil
                 draggingBandID = nil
             }
+    }
+
+    /// Scroll-wheel handler: when a band is hovered, vertical scroll changes Q;
+    /// when no band is under the cursor, scroll is ignored (we don't want to
+    /// hijack page scroll). Each notch is ~0.05 Q, sign reversed so wheel-up
+    /// widens the bell (Q down) like every other pro EQ.
+    private func handleScroll(_ dy: CGFloat, bands: [EQBand]) {
+        guard let id = hoveredBandID,
+              let band = bands.first(where: { $0.id == id }),
+              band.type.usesQ else { return }
+        if dragAnchor == nil { state.recordUndoSnapshot() }
+        let step = Float(dy) * 0.05
+        let next = max(0.1, min(50, band.q - step))
+        state.updateBandTransient(id: id) { $0.q = next }
     }
 
     /// Find the band whose dot strictly contains `point`, where "contains"
@@ -1251,20 +1329,42 @@ private struct EQCurveView: View {
             }
             return out
         }()
-        Text(parts.joined(separator: "  ·  "))
+        Text(parts.joined(separator: "  "))
             .font(.system(size: 10, weight: .medium))
             .monospacedDigit()
-            .foregroundStyle(.primary.opacity(0.85))
-            .padding(.horizontal, 6)
+            .kerning(0.15)
+            .foregroundStyle(.primary.opacity(0.92))
+            .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .strokeBorder(.quaternary.opacity(0.5), lineWidth: 0.5)
             )
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+    }
+
+    /// Position the tooltip just above the dot, clamped to stay within
+    /// the canvas. ~70pt × ~18pt covers the longest readout (e.g.
+    /// "12.34 kHz  +11.5 dB  Q 9.99"); the math keeps it on screen even
+    /// when the band sits near the top edge or against a wall.
+    fileprivate static func tooltipPosition(for dot: CGPoint, viewSize: CGSize) -> CGPoint {
+        let tw: CGFloat = 90
+        let th: CGFloat = 18
+        let pad: CGFloat = 4
+        // Default: centered above the dot.
+        var x = dot.x
+        var y = dot.y - 14
+        // Flip below if too close to the top.
+        if y - th / 2 < pad { y = dot.y + 14 }
+        // Clamp horizontally so the bubble doesn't clip the side walls.
+        let halfTW = tw / 2
+        if x - halfTW < pad { x = pad + halfTW }
+        if x + halfTW > viewSize.width - pad { x = viewSize.width - pad - halfTW }
+        return CGPoint(x: x, y: y)
     }
 
     // MARK: Coordinate math (static so call sites don't need an instance)
@@ -1388,7 +1488,8 @@ private struct FrequencyAxis: View {
             ZStack(alignment: .topLeading) {
                 ForEach(ticks, id: \.label) { tick in
                     Text(tick.label)
-                        .font(.system(size: 9))
+                        .font(.system(size: 9, weight: .regular))
+                        .monospacedDigit()
                         .foregroundStyle(.tertiary)
                         .position(x: CGFloat(tick.t) * geo.size.width, y: 6)
                 }
@@ -1495,6 +1596,124 @@ private struct StereoMeter: View {
 
 // MARK: - Sheets
 
+/// Identifiable wrapper so a UUID can drive a SwiftUI `.sheet(item:)`.
+struct BandTarget: Identifiable, Equatable {
+    let id: UUID
+}
+
+/// Numeric editor for a single band. Sheet body picks the matching band
+/// from working state each frame; if it's been deleted (e.g. via right-
+/// click → Remove band while the inspector is open) we auto-dismiss.
+private struct BandInspectorSheet: View {
+    @ObservedObject var state: AppState
+    let bandID: UUID
+    var onClose: () -> Void
+
+    @State private var draftType: EQFilter = .parametric
+    @State private var freqText: String = ""
+    @State private var gainText: String = ""
+    @State private var qText: String = ""
+    @State private var bypass: Bool = false
+    @State private var didLoad = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Band").font(.headline)
+
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                fieldLabel("Type")
+                Picker("", selection: $draftType) {
+                    ForEach(EQFilter.allCases) { t in
+                        Text(t.displayName).tag(t)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack(spacing: 14) {
+                numericField(label: "Hz", text: $freqText, width: 92)
+                numericField(label: "dB", text: $gainText, width: 76,
+                             enabled: draftType.usesGain)
+                numericField(label: "Q",  text: $qText,    width: 64,
+                             enabled: draftType.usesQ)
+            }
+
+            Toggle(isOn: $bypass) {
+                Text("Bypass band").font(.system(size: 12))
+            }
+            .toggleStyle(.checkbox)
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onClose)
+                    .keyboardShortcut(.cancelAction)
+                Button("Apply") { commit() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+        .onAppear { loadDraftFromState() }
+    }
+
+    private func loadDraftFromState() {
+        guard !didLoad else { return }
+        didLoad = true
+        guard let b = state.workingBands.first(where: { $0.id == bandID }) else {
+            onClose(); return
+        }
+        draftType = b.type
+        freqText  = String(format: "%.1f", Double(b.frequency))
+        gainText  = String(format: "%+.1f", Double(b.gain))
+        qText     = String(format: "%.2f", Double(b.q))
+        bypass    = b.bypass
+    }
+
+    private func commit() {
+        let f = Float(freqText) ?? 1000
+        let g = Float(gainText) ?? 0
+        let q = Float(qText) ?? 1.0
+        state.updateBand(id: bandID) { b in
+            b.type = draftType
+            b.frequency = max(20, min(22000, f))
+            if draftType.usesGain { b.gain = max(-24, min(24, g)) }
+            if draftType.usesQ    { b.q    = max(0.1, min(50, q)) }
+            b.bypass = bypass
+        }
+        onClose()
+    }
+
+    @ViewBuilder
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .textCase(.uppercase)
+            .tracking(0.4)
+            .foregroundStyle(.secondary)
+            .frame(width: 38, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func numericField(label: String, text: Binding<String>,
+                              width: CGFloat, enabled: Bool = true) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .textCase(.uppercase)
+                .tracking(0.4)
+                .foregroundStyle(.secondary)
+            TextField("", text: text)
+                .textFieldStyle(.roundedBorder)
+                .monospacedDigit()
+                .frame(width: width)
+                .disabled(!enabled)
+                .opacity(enabled ? 1 : 0.45)
+        }
+    }
+}
+
 private struct SavePresetSheet: View {
     @Binding var name: String
     var onSave: (String) -> Void
@@ -1503,8 +1722,6 @@ private struct SavePresetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Save preset").font(.headline)
-            Text("The current EQ and output device will be saved together.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
             TextField("Preset name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { onSave(name) }
@@ -1575,7 +1792,7 @@ private struct HeadphoneSearchSheet: View {
             }
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Sennheiser HD 600, AirPods Max, my custom preset…", text: $query)
+                TextField("Brand or model", text: $query)
                     .textFieldStyle(.plain)
             }
             .padding(8)
@@ -1675,14 +1892,13 @@ private struct UserPresetSearchRow: View {
     var onClose: () -> Void
 
     var body: some View {
-        HStack {
-            Image(systemName: "star.fill")
-                .foregroundStyle(Color.accentColor)
-                .font(.system(size: 10))
+        HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(preset.name).font(.system(size: 12, weight: .medium))
                 Text("\(preset.bands.count) bands · preamp \(String(format: "%+0.1f", Double(preset.preampDB))) dB")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             Button("Load") {
@@ -1702,13 +1918,10 @@ private struct CatalogSearchRow: View {
     var onClose: () -> Void
 
     var body: some View {
-        HStack {
-            Image(systemName: "headphones")
-                .foregroundStyle(.secondary)
-                .font(.system(size: 10))
+        HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.name).font(.system(size: 12, weight: .medium))
-                Text("by \(entry.measurer)")
+                Text(entry.measurer)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             Spacer()
@@ -1723,6 +1936,40 @@ private struct CatalogSearchRow: View {
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
+    }
+}
+
+// MARK: - Scroll/click capture
+
+/// Transparent NSView that catches scroll-wheel events. SwiftUI has no
+/// public scroll hook for non-ScrollView surfaces, so we bridge a quiet
+/// AppKit layer to harvest scrollWheel events and forward to SwiftUI
+/// state. hitTest returns nil so all other mouse events pass through
+/// untouched to the SwiftUI gestures above.
+private struct ScrollWheelCatcher: NSViewRepresentable {
+    var onScroll: (CGFloat) -> Void
+
+    final class CatcherView: NSView {
+        var onScroll: ((CGFloat) -> Void)?
+
+        override var acceptsFirstResponder: Bool { true }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var isFlipped: Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func scrollWheel(with event: NSEvent) {
+            let dy = event.scrollingDeltaY
+            guard abs(dy) > 0.1 else { return }
+            onScroll?(dy)
+        }
+    }
+
+    func makeNSView(context: Context) -> CatcherView {
+        let v = CatcherView()
+        v.onScroll = onScroll
+        return v
+    }
+    func updateNSView(_ nsView: CatcherView, context: Context) {
+        nsView.onScroll = onScroll
     }
 }
 
