@@ -444,6 +444,10 @@ final class AppState: ObservableObject {
     private var lastHeartbeatLogAt: CFTimeInterval = 0
     private var firstObservedInputStallAt: CFTimeInterval = 0
     private var firstObservedRingUnderrunAt: CFTimeInterval = 0
+    /// Tracks "system default has drifted away from BlackHole" so we can
+    /// restore it from the watchdog without depending on the HAL listener
+    /// (which macOS sometimes coalesces by tens of seconds).
+    private var firstObservedDefaultDriftAt: CFTimeInterval = 0
 
     private func startEngineWatchdog() {
         watchdog = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -466,24 +470,26 @@ final class AppState: ObservableObject {
             firstObservedTapSilenceAt = 0
             firstObservedInputStallAt = 0
             firstObservedRingUnderrunAt = 0
+            firstObservedDefaultDriftAt = 0
             return
         }
 
         let now = CACurrentMediaTime()
         let runtime = now - lastRoutingCompletedAt
+        let inputRenderAge = engine.lastInputRenderAt > 0
+            ? now - engine.lastInputRenderAt : 0
 
-        // Periodic diagnostic. The two devices run on independent
-        // clocks (drift handled by varispeed inside the engine), so
-        // the watchdog only has to check "is this thing actually
-        // running and getting data." inPeak is the post-EQ tap; ring
-        // is how full the input→output ring buffer is (sustained-low
-        // = input starvation; sustained-high = consumer starvation).
+        // Periodic diagnostic. inPeak is the post-EQ tap; inputRenderAge
+        // is "seconds since the input AUHAL render proc last fired"
+        // (the authoritative producer-alive signal). ringFrames is
+        // diagnostic only — see the property comment on EQEngine for
+        // why it's a poor stall signal.
         if now - lastHeartbeatLogAt > 30 {
             lastHeartbeatLogAt = now
             let defaultOut = DeviceCatalog.currentDefaultOutput()
             let defaultName = DeviceCatalog.all().first { $0.id == defaultOut }?.name ?? "?"
             let ringFill = engine.ringBufferFillFrames
-            Log.write("heartbeat: running=\(engine.isRunning) inPeak=\(String(format: "%.3f", engine.lastInputPeak)) preamp=\(String(format: "%+0.2f", workingPreamp)) sysDefault=\(defaultName) uptime=\(Int(runtime))s ringFrames=\(ringFill)")
+            Log.write("heartbeat: running=\(engine.isRunning) inPeak=\(String(format: "%.3f", engine.lastInputPeak)) preamp=\(String(format: "%+0.2f", workingPreamp)) sysDefault=\(defaultName) uptime=\(Int(runtime))s ringFrames=\(ringFill) inputRenderAge=\(String(format: "%.2f", inputRenderAge))s")
         }
 
         // Failure mode 1: AVAudioEngine.isRunning has gone false. Wait
@@ -499,6 +505,7 @@ final class AppState: ObservableObject {
                 firstObservedTapSilenceAt = 0
                 firstObservedInputStallAt = 0
                 firstObservedRingUnderrunAt = 0
+                firstObservedDefaultDriftAt = 0
                 handleConfigChange()
             }
             return
@@ -524,46 +531,61 @@ final class AppState: ObservableObject {
         }
         firstObservedTapSilenceAt = 0
 
-        // Failure mode 3: ring buffer empty for ≥ 5 s while EQ is on
-        // and the user hasn't paused. With the new architecture the
-        // input AUHAL and the output engine are independent — if the
-        // input AUHAL stops feeding the ring, the consumer drains it
-        // and starts rendering silence. Detect by sustained zero fill;
-        // recover by restarting (which rebuilds the input AUHAL).
-        // We give the ring buffer 5 s of sustained underrun before
-        // acting because legitimate program silence (paused music)
-        // produces brief underruns by definition, and a paranoid
-        // recovery would flap during normal pauses.
-        if postSettle && engine.ringBufferFillFrames == 0 {
-            if firstObservedRingUnderrunAt == 0 {
-                firstObservedRingUnderrunAt = now
-            } else if now - firstObservedRingUnderrunAt >= 5.0 {
-                // Before treating this as engine failure, check whether the
-                // system default output has drifted away from BlackHole. When
-                // another audio app launches (Rekordbox is the canonical
-                // case) it can take the system default with it; music apps
-                // follow, stop writing to BlackHole, and our ring drains.
-                // The default-output listener handles this in principle, but
-                // macOS coalesces HAL notifications during another app's
-                // launch and the listener can arrive a full minute late -
-                // long enough for the recovery cap to disable EQ. Polling
-                // directly here restores within ~200 ms with no engine
-                // restart.
-                if let inUID = inputDeviceUID,
-                   let inDev = DeviceCatalog.device(uid: inUID),
-                   DeviceCatalog.currentDefaultOutput() != inDev.id {
-                    Log.write("watchdog: ring empty + default drifted to id=\(DeviceCatalog.currentDefaultOutput()); restoring \(inDev.name) instead of restarting engine")
-                    firstObservedRingUnderrunAt = 0
-                    handleSystemDefaultOutputChanged()
-                    return
-                }
-                Log.write("watchdog: ring buffer empty for \(now - firstObservedRingUnderrunAt)s - recovering")
-                firstObservedRingUnderrunAt = 0
+        // Failure mode 3: input AUHAL render proc stopped firing. This
+        // is the unambiguous producer-dead signal — the proc fires
+        // whenever BlackHole's clock is driving (no app needs to be
+        // writing audio for it to fire, since BlackHole emits zeros
+        // when idle). When it stops, the input pipeline really is dead
+        // (USB sleep, BlackHole driver crash, AUHAL disconnected, etc.)
+        // and the only fix is restarting the routing.
+        //
+        // Historical note: this used to key off `ringBufferFillFrames
+        // == 0`, which produced a false-positive recovery storm. With
+        // balanced producer/consumer the ring oscillates between
+        // near-empty and one-quantum-full; sampling at 1 Hz can
+        // legitimately land at 0 on a healthy engine, especially
+        // after long uptime or post-wake when the consumer is briefly
+        // a hair faster than the producer. That false positive showed
+        // up as "Earshot stops working overnight": 5 consecutive 1 Hz
+        // samples at 0 → recovery; 6 recoveries in 60 s → recovery
+        // cap → disableEQ. lastInputRenderAt has no such ambiguity.
+        if postSettle && inputRenderAge > 5.0 {
+            if firstObservedInputStallAt == 0 {
+                firstObservedInputStallAt = now
+                return
+            }
+            if now - firstObservedInputStallAt >= 1.0 {
+                Log.write("watchdog: input render proc silent for \(String(format: "%.2f", inputRenderAge))s - recovering")
+                firstObservedInputStallAt = 0
                 handleConfigChange()
                 return
             }
         } else {
-            firstObservedRingUnderrunAt = 0
+            firstObservedInputStallAt = 0
+        }
+
+        // Failure mode 4 (separate concern): system default has drifted
+        // away from BlackHole. When another audio app launches
+        // (Rekordbox is the canonical case) it can take the system
+        // default with it; music apps follow, stop writing to BlackHole.
+        // The default-output HAL listener handles this in principle, but
+        // macOS coalesces HAL notifications during another app's launch
+        // and the listener can arrive a full minute late. Poll for it
+        // directly so we restore within ~2 s. Decoupled from "ring
+        // empty" entirely — we just check whether the system default
+        // is still BlackHole, regardless of buffer state.
+        if let inUID = inputDeviceUID,
+           let inDev = DeviceCatalog.device(uid: inUID),
+           DeviceCatalog.currentDefaultOutput() != inDev.id {
+            if firstObservedDefaultDriftAt == 0 {
+                firstObservedDefaultDriftAt = now
+            } else if now - firstObservedDefaultDriftAt >= 2.0 {
+                Log.write("watchdog: default drifted to id=\(DeviceCatalog.currentDefaultOutput()) for \(String(format: "%.2f", now - firstObservedDefaultDriftAt))s - restoring \(inDev.name)")
+                firstObservedDefaultDriftAt = 0
+                handleSystemDefaultOutputChanged()
+            }
+        } else {
+            firstObservedDefaultDriftAt = 0
         }
     }
 
@@ -1048,7 +1070,11 @@ final class AppState: ObservableObject {
                             successLogContext: "EQ enabled out=\(outDev.name)",
                             failureRecovery: { [weak self] in
             guard let self = self else { return }
-            self.engine.stop()
+            // engine.stop() can block on coreaudiod IPC; on main thread
+            // that triggers the macOS UI hang killer (SIGKILL after 20s).
+            // Funnel through the routing queue.
+            let engine = self.engine
+            self.routingQueue.async { engine.stop() }
             if preserveIntent {
                 Log.write("launch-time engine failure - attempting auto-fallback to a working output")
                 self.handleLaunchOutputFallbackOrError(self.lastError ?? "EQ couldn't start on the saved output.")
@@ -1167,7 +1193,11 @@ final class AppState: ObservableObject {
     }
 
     private func disableEQ(restoreSystemOutput: Bool) {
-        engine.stop()
+        // Don't call engine.stop() on the main thread: the CoreAudio teardown
+        // inside can block on coreaudiod IPC long enough to trip macOS's UI
+        // hang killer (SIGKILL after ~20s). stopEngineOnQueue dispatches to
+        // the routing queue and flips isApplyingRouting for UI feedback.
+        stopEngineOnQueue(reason: "disableEQ")
         if restoreSystemOutput {
             restoreSystemOutputIfHijacked()
         }

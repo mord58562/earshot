@@ -75,10 +75,20 @@ final class EQEngine: @unchecked Sendable {
         return t.sampleTime
     }
 
-    /// Number of frames currently in the ring buffer. Watchdog reads
-    /// this to detect underruns (consistently low fill = consumer is
-    /// outpacing producer = stalled input).
+    /// Number of frames currently in the ring buffer. Diagnostic only —
+    /// sampling fill once per second is not a reliable stall signal
+    /// because with balanced producer/consumer the ring oscillates
+    /// between near-empty and one-quantum-full and the sample can
+    /// legitimately land at 0 on a healthy engine.
     var ringBufferFillFrames: UInt32 { ringBuffer?.fillFrames ?? 0 }
+
+    /// Wall-clock of the last input render proc invocation. This is the
+    /// authoritative "input pipeline alive" signal: the AUHAL's render
+    /// proc fires as long as BlackHole is driving the clock, regardless
+    /// of whether any app is writing audio. Stops advancing only when
+    /// the input pipeline genuinely died (USB sleep, BlackHole crash,
+    /// AUHAL disconnected). Use this in the watchdog, not ring fill.
+    var lastInputRenderAt: CFTimeInterval { inputCapture?.lastRenderAt ?? 0 }
 
     private let levelDispatchInterval: CFTimeInterval = 1.0 / 30.0
     private var lastLevelDispatch: CFTimeInterval = 0
@@ -127,7 +137,13 @@ final class EQEngine: @unchecked Sendable {
     }
 
     func stop() {
-        Log.write("EQEngine.stop() entered (running=\(isRunning))")
+        let t0 = CACurrentMediaTime()
+        let thread = Thread.isMainThread ? "main" : "bg"
+        Log.write("EQEngine.stop() entered (running=\(isRunning), thread=\(thread))")
+        // Per-step logging: a previous crash showed stop() entering but never
+        // completing, with macOS's UI hang killer SIGKILL'ing the process 21s
+        // later. We didn't know which step blocked. Log every step so the
+        // next time it hangs we can pinpoint the wedge.
         rateUpdateTimer?.cancel()
         rateUpdateTimer = nil
         fadeTimer?.cancel()
@@ -138,15 +154,29 @@ final class EQEngine: @unchecked Sendable {
         }
         // Stop input first (no more producer); drain by stopping engine
         // immediately after — anything left in the ring buffer would just
-        // tail off into silence.
-        inputCapture?.stop()
+        // tail off into silence. inputCapture?.stop() goes through
+        // AudioOutputUnitStop/AudioUnitUninitialize/AudioComponentInstanceDispose,
+        // all of which can block on coreaudiod IPC.
+        if inputCapture != nil {
+            Log.write("EQEngine.stop: inputCapture.stop()")
+            inputCapture?.stop()
+            Log.write("EQEngine.stop: inputCapture done (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
+        }
         inputCapture = nil
         if let eq = eq {
+            Log.write("EQEngine.stop: eq.removeTap")
             eq.removeTap(onBus: 0)
         }
         usleep(15_000)
-        if let e = engine, e.isRunning { e.stop() }
-        engine?.reset()
+        if let e = engine, e.isRunning {
+            Log.write("EQEngine.stop: AVAudioEngine.stop()")
+            e.stop()
+            Log.write("EQEngine.stop: AVAudioEngine.stop done (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
+        }
+        if engine != nil {
+            Log.write("EQEngine.stop: AVAudioEngine.reset")
+            engine?.reset()
+        }
         engine = nil
         sourceNode = nil
         eq = nil
@@ -159,7 +189,7 @@ final class EQEngine: @unchecked Sendable {
         currentOutputUID = nil
         startedAt = 0
         onLevel?(0, 0)
-        Log.write("EQEngine.stop() complete")
+        Log.write("EQEngine.stop() complete (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
     }
 
     // MARK: - BlackHole detection
