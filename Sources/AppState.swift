@@ -253,13 +253,11 @@ final class AppState: ObservableObject {
             DispatchQueue.main,
             devicesBlock)
 
-        // ROOT CAUSE of the "audio stops working ~30 s in": macOS swaps the
-        // system default output back away from BlackHole (Bluetooth wake,
-        // USB sleep/wake, app preference change, or coreaudiod's own
-        // auto-switching). Apps then write directly to the new default;
-        // BlackHole produces silence; the engine stays "running" rendering
-        // zeros forever. Listening for the property and forcing it back
-        // while EQ is on is the actual fix.
+        // Audio Hijack-style: when the user changes the system default
+        // output away from BlackHole, disengage EQ entirely so the new
+        // device receives audio normally. (Previously we forced the
+        // default back to BlackHole, making the macOS Sound menu useless
+        // while Earshot was running.)
         var defaultAddr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -282,28 +280,39 @@ final class AppState: ObservableObject {
 
     private func handleSystemDefaultOutputChanged() {
         let currentDefault = DeviceCatalog.currentDefaultOutput()
-        let currentName = DeviceCatalog.all().first { $0.id == currentDefault }?.name ?? "unknown"
-        // Always log so we can see when the property fires, even when no
-        // action is needed. Diagnostic for "audio stops" reports.
+        let currentDev = DeviceCatalog.all().first { $0.id == currentDefault }
+        let currentName = currentDev?.name ?? "unknown"
         Log.write("default-output listener fired: now=\(currentName)(id=\(currentDefault)) eqEnabled=\(eqEnabled) applying=\(isApplyingRouting)")
 
-        guard eqEnabled, !isApplyingRouting else { return }
+        guard !isApplyingRouting else { return }
         guard let inUID = inputDeviceUID,
               let inDev = DeviceCatalog.device(uid: inUID) else { return }
-        if currentDefault == inDev.id { return }
 
-        let now = CACurrentMediaTime()
-        defaultRestoreBurst.append(now)
-        defaultRestoreBurst.removeAll { now - $0 > 10 }
-        if defaultRestoreBurst.count > 5 {
-            Log.write("default-output flap detected (\(defaultRestoreBurst.count) restores in 10s) - giving up")
-            lastError = "Another app or system event keeps changing the audio output. Disable EQ or pick a different output."
-            return
+        if eqEnabled {
+            if currentDefault == inDev.id { return }
+            guard let newDev = currentDev else { return }
+            if DeviceCatalog.looksLikeLoopback(newDev) { return }
+
+            // Audio Hijack-style: user picked another output via the macOS
+            // Sound menu / Control Center / Bluetooth wake. Get out of the
+            // way - tear down the EQ pipeline so audio flows straight to
+            // their pick, unprocessed.
+            Log.write("system default -> \(newDev.name): disengaging EQ to let macOS route normally")
+            savedSystemOutputBeforeEQ = nil
+            outputDeviceUID = newDev.uid
+            disableEQ(restoreSystemOutput: false)
+            persist()
+        } else {
+            // EQ is off. If the user re-selects the loopback device that
+            // Earshot captures from (BlackHole 2ch), re-engage EQ so the
+            // pipeline resumes as if it had never been deselected. The
+            // saved outputDeviceUID is whatever they had piping audio
+            // through Earshot before they switched away.
+            if currentDefault == inDev.id {
+                Log.write("system default -> \(inDev.name): re-engaging EQ")
+                setEQEnabled(true)
+            }
         }
-
-        Log.write("forcing default back to \(inDev.name) for EQ")
-        DeviceCatalog.setDefaultOutput(inDev.id)
-        lastDefaultRestoreAt = now
     }
 
     private func wireEngineCallbacks() {
