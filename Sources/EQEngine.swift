@@ -232,7 +232,7 @@ final class EQEngine: @unchecked Sendable {
         let pinOK = DeviceCatalog.setNominalSampleRate(inDev.id, outSR)
         Log.write("pinned BlackHole to \(outSR) Hz to match \(outDev.name): \(pinOK ? "ok" : "refused")")
 
-        // Stereo Float32 is the canonical format throughout the chain.
+        // Stereo Float32 is the working format throughout the chain.
         guard let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: outSR, channels: 2) else {
             throw NSError(domain: "EQEngine", code: -12,
                           userInfo: [NSLocalizedDescriptionKey: "Could not create stereo Float32 format"])

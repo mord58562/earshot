@@ -253,11 +253,12 @@ final class AppState: ObservableObject {
             DispatchQueue.main,
             devicesBlock)
 
-        // Audio Hijack-style: when the user changes the system default
-        // output away from BlackHole, disengage EQ entirely so the new
-        // device receives audio normally. (Previously we forced the
-        // default back to BlackHole, making the macOS Sound menu useless
-        // while Earshot was running.)
+        // When the user changes the system default output away from
+        // BlackHole, disengage EQ entirely so the new device receives
+        // audio normally. Re-selecting BlackHole as the default re-
+        // engages EQ. (Previously we forced the default back to BlackHole
+        // on every drift, making the macOS Sound menu useless while
+        // Earshot was running.)
         var defaultAddr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -293,10 +294,10 @@ final class AppState: ObservableObject {
             guard let newDev = currentDev else { return }
             if DeviceCatalog.looksLikeLoopback(newDev) { return }
 
-            // Audio Hijack-style: user picked another output via the macOS
-            // Sound menu / Control Center / Bluetooth wake. Get out of the
-            // way - tear down the EQ pipeline so audio flows straight to
-            // their pick, unprocessed.
+            // User picked another output via the macOS Sound menu, Control
+            // Center, or a Bluetooth/USB wake event. Get out of the way -
+            // tear down the EQ pipeline so audio flows straight to their
+            // pick, unprocessed.
             Log.write("system default -> \(newDev.name): disengaging EQ to let macOS route normally")
             savedSystemOutputBeforeEQ = nil
             outputDeviceUID = newDev.uid
@@ -574,15 +575,14 @@ final class AppState: ObservableObject {
         }
 
         // Failure mode 4 (separate concern): system default has drifted
-        // away from BlackHole. When another audio app launches
-        // (Rekordbox is the canonical case) it can take the system
-        // default with it; music apps follow, stop writing to BlackHole.
-        // The default-output HAL listener handles this in principle, but
-        // macOS coalesces HAL notifications during another app's launch
-        // and the listener can arrive a full minute late. Poll for it
-        // directly so we restore within ~2 s. Decoupled from "ring
-        // empty" entirely — we just check whether the system default
-        // is still BlackHole, regardless of buffer state.
+        // away from BlackHole because another audio app launched and
+        // grabbed the default for itself. The default-output HAL
+        // listener handles this in principle, but macOS coalesces HAL
+        // notifications during another app's launch and the listener
+        // can arrive a full minute late. Poll for it directly so we
+        // re-route within ~2 s. Decoupled from "ring empty" entirely -
+        // we just check whether the system default is still BlackHole,
+        // regardless of buffer state.
         if let inUID = inputDeviceUID,
            let inDev = DeviceCatalog.device(uid: inUID),
            DeviceCatalog.currentDefaultOutput() != inDev.id {
