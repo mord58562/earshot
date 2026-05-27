@@ -16,6 +16,18 @@ and every sound your Mac plays runs through the EQ on its way out.
 | ![Auto preamp tracking](docs/screenshots/04-preamp-meter-active.png) | ![Speaker output](docs/screenshots/05-speaker-output.png) |
 | Auto-preamp tracking live levels. | Routing to MacBook speakers instead of headphones. |
 
+## What's new in 1.3.0
+
+- **Any 2-channel loopback driver works.** Earshot used to require
+  BlackHole 2ch specifically. It now accepts BlackHole 2ch, VB-Cable,
+  Soundflower (2ch), or Loopback Audio - whichever you already have
+  installed. Multichannel BlackHole (16ch / 64ch) is skipped because
+  the capture pipeline is stereo.
+- **Loopbacks no longer crash the output picker.** Picking BlackHole
+  as the *output* device used to feed the loopback into itself and
+  wedge CoreAudio. Virtual loopbacks are now hidden from the output
+  list entirely - they're input-only by definition.
+
 ## What's new in 1.0.1
 
 - **Prebuilt download.** Grab `Earshot.app.zip` from
@@ -75,9 +87,16 @@ and every sound your Mac plays runs through the EQ on its way out.
 
 - macOS 13.0 (Ventura) or later
 - Apple Silicon (arm64)
-- [BlackHole 2ch](https://existential.audio/blackhole/) installed (free,
-  MIT-licensed). Earshot reads system audio out of BlackHole as a
-  virtual loopback.
+- A 2-channel virtual loopback driver. Any of:
+  - [BlackHole 2ch](https://existential.audio/blackhole/) (free,
+    MIT-licensed) - recommended.
+  - [VB-Cable](https://vb-audio.com/Cable/) (free, donationware).
+  - [Soundflower (2ch)](https://github.com/mattingalls/Soundflower)
+    (MIT, unmaintained).
+  - [Loopback](https://rogueamoeba.com/loopback/) (Rogue Amoeba, paid).
+
+  Earshot picks the first one it finds. If you don't have any
+  installed, the onboarding panel walks you through BlackHole 2ch.
 
 ## Installing
 
@@ -85,11 +104,13 @@ Two paths, pick whichever you prefer.
 
 ### Option A — Prebuilt download (no Terminal)
 
-1. **Install BlackHole 2ch first.** Earshot won't capture audio without
-   it. Either run `brew install blackhole-2ch` once, or download the
+1. **Install a 2-channel loopback driver first.** Earshot won't
+   capture audio without one. The recommended free option is BlackHole
+   2ch - either run `brew install blackhole-2ch`, or download the
    installer from [existential.audio/blackhole](https://existential.audio/blackhole/)
    and run it. A reboot after install is sometimes needed before macOS
-   sees the new driver.
+   sees the new driver. VB-Cable, Soundflower (2ch), and Loopback
+   Audio also work if you already have one installed.
 2. **Download `Earshot.app.zip`** from the [latest release](https://github.com/mord58562/earshot/releases/latest).
 3. **Unzip** it (Finder does this on double-click) and drag
    `Earshot.app` into `/Applications/`.

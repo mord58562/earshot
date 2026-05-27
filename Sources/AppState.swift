@@ -85,8 +85,6 @@ final class AppState: ObservableObject {
     private var deviceListListener: AudioObjectPropertyListenerBlock?
     private var didFirstLaunchSetup = false
 
-    static let preferredLoopbackName = "BlackHole 2ch"
-
     init() {
         loadFromDisk()
         refreshDevices()
@@ -216,21 +214,23 @@ final class AppState: ObservableObject {
     func refreshDevices() {
         let outs = DeviceCatalog.outputs()
         let ins = DeviceCatalog.inputs()
-        availableOutputs = outs
+        // Loopback devices (BlackHole etc.) are read FROM, not played to:
+        // picking BlackHole as the output feeds the loopback back into
+        // itself and wedges CoreAudio. Hide them from the output picker.
+        availableOutputs = outs.filter { !DeviceCatalog.looksLikeLoopback($0) }
         availableInputs = ins
 
         if inputDeviceUID == nil || DeviceCatalog.device(uid: inputDeviceUID ?? "") == nil {
-            if let bh = ins.first(where: { $0.name == Self.preferredLoopbackName }) {
-                inputDeviceUID = bh.uid
-            } else if let firstLoopback = ins.first(where: { DeviceCatalog.looksLikeLoopback($0) }) {
-                inputDeviceUID = firstLoopback.uid
+            if let loopbackUID = EQEngine.findLoopbackInputUID() {
+                inputDeviceUID = loopbackUID
             } else {
                 inputDeviceUID = ins.first?.uid
             }
         }
-        if outputDeviceUID == nil || DeviceCatalog.device(uid: outputDeviceUID ?? "") == nil {
-            outputDeviceUID = outs.first(where: { !DeviceCatalog.looksLikeLoopback($0) })?.uid
-                ?? outs.first?.uid
+        let savedOutput = outputDeviceUID.flatMap { DeviceCatalog.device(uid: $0) }
+        let savedOutputIsLoopback = savedOutput.map { DeviceCatalog.looksLikeLoopback($0) } ?? false
+        if outputDeviceUID == nil || savedOutput == nil || savedOutputIsLoopback {
+            outputDeviceUID = availableOutputs.first?.uid ?? outs.first?.uid
         }
     }
 
@@ -1067,17 +1067,19 @@ final class AppState: ObservableObject {
             return
         }
 
-        // BlackHole pipeline needs system default = BlackHole so apps
-        // write where we capture. Save the prior default so we can put it
-        // back when the user toggles off.
-        if let blackHoleUID = EQEngine.findBlackHoleUID(),
-           let blackHoleDev = DeviceCatalog.device(uid: blackHoleUID) {
+        // Loopback pipeline needs the system default to be whichever
+        // loopback Earshot is capturing from (BlackHole / VB-Cable /
+        // Soundflower / Loopback Audio) so apps write where we read.
+        // Save the prior default so we can put it back when the user
+        // toggles off.
+        if let loopbackUID = EQEngine.findLoopbackInputUID(),
+           let loopbackDev = DeviceCatalog.device(uid: loopbackUID) {
             let priorID = DeviceCatalog.currentDefaultOutput()
-            if priorID != 0, priorID != blackHoleDev.id,
+            if priorID != 0, priorID != loopbackDev.id,
                let priorDev = DeviceCatalog.all().first(where: { $0.id == priorID }) {
                 savedSystemOutputBeforeEQ = priorDev.uid
             }
-            DeviceCatalog.setDefaultOutput(blackHoleDev.id)
+            DeviceCatalog.setDefaultOutput(loopbackDev.id)
         }
 
         let preamp = workingPreamp
@@ -1253,7 +1255,7 @@ final class AppState: ObservableObject {
     }
 
     var preferredLoopbackInstalled: Bool {
-        DeviceCatalog.inputs().contains { $0.name == Self.preferredLoopbackName }
+        EQEngine.findLoopbackInputUID() != nil
     }
 
     // MARK: - AutoEQ import / export

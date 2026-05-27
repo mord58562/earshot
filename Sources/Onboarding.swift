@@ -4,9 +4,10 @@ import AppKit
 
 /// First-run onboarding. Three phases:
 ///
-///   1. BlackHole 2ch missing → show install instructions + "Re-check"
-///      button. Earshot needs BlackHole as a loopback to intercept
-///      system audio; there is no path that skips this.
+///   1. No 2-channel loopback driver found → show install instructions
+///      + "Re-check" button. Earshot needs a loopback to intercept
+///      system audio; BlackHole 2ch is the recommended free option but
+///      VB-Cable, Soundflower (2ch), and Loopback Audio also work.
 ///   2. Microphone permission not granted → ask. macOS classifies a
 ///      virtual-audio loopback as a microphone, so denial silently
 ///      breaks capture.
@@ -23,7 +24,7 @@ struct OnboardingSheet: View {
     @ObservedObject var state: AppState
     var onClose: () -> Void
 
-    @State private var blackHolePresent: Bool = EQEngine.findBlackHoleUID() != nil
+    @State private var loopbackPresent: Bool = EQEngine.findLoopbackInputUID() != nil
     @State private var micStatus: AVAuthorizationStatus =
         AVCaptureDevice.authorizationStatus(for: .audio)
 
@@ -39,8 +40,8 @@ struct OnboardingSheet: View {
 
     @ViewBuilder
     private var phaseSection: some View {
-        if !blackHolePresent {
-            blackHolePane
+        if !loopbackPresent {
+            loopbackPane
         } else if micStatus != .authorized {
             micPane
         } else {
@@ -48,12 +49,12 @@ struct OnboardingSheet: View {
         }
     }
 
-    // MARK: BlackHole
+    // MARK: Loopback driver
 
-    private var blackHolePane: some View {
+    private var loopbackPane: some View {
         VStack(alignment: .leading, spacing: 12) {
-            label("BlackHole 2ch isn't installed.")
-            Text("Earshot needs a virtual loopback driver to capture system audio. BlackHole 2ch is the standard one; install with Homebrew or directly:")
+            label("No loopback driver found.")
+            Text("Earshot needs a 2-channel virtual loopback to capture system audio. BlackHole 2ch is the recommended free option - install with Homebrew or directly:")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 6) {
@@ -66,10 +67,13 @@ struct OnboardingSheet: View {
                      destination: URL(string: "https://existential.audio/blackhole")!)
                     .font(.system(size: 12))
             }
+            Text("VB-Cable, Soundflower (2ch), or Loopback Audio also work if you already have one installed.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("Re-check") {
-                    blackHolePresent = EQEngine.findBlackHoleUID() != nil
+                    loopbackPresent = EQEngine.findLoopbackInputUID() != nil
                 }
                 .keyboardShortcut(.defaultAction)
             }
@@ -81,7 +85,7 @@ struct OnboardingSheet: View {
     private var micPane: some View {
         VStack(alignment: .leading, spacing: 12) {
             label("One macOS permission to enable.")
-            Text("BlackHole appears to macOS as a microphone, so Earshot has to ask for Microphone access. It only reads from the loopback - no real microphone is ever opened.")
+            Text("Virtual loopback drivers appear to macOS as microphones, so Earshot has to ask for Microphone access. It only reads from the loopback - no real microphone is ever opened.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             HStack {
@@ -148,12 +152,12 @@ enum Onboarding {
     private static var window: NSWindow?
 
     /// Show the onboarding window on first launch, or whenever the user
-    /// is missing BlackHole / mic permission. Driver and permission
-    /// status are checked at every invocation so the gate stays
-    /// accurate even after BlackHole was installed mid-session.
+    /// is missing a loopback driver / mic permission. Driver and
+    /// permission status are checked at every invocation so the gate
+    /// stays accurate even after a driver was installed mid-session.
     static func shouldShow() -> Bool {
         if UserDefaults.standard.bool(forKey: "earshot.onboardingComplete") {
-            if EQEngine.findBlackHoleUID() == nil { return true }
+            if EQEngine.findLoopbackInputUID() == nil { return true }
             if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized { return true }
             return false
         }

@@ -97,10 +97,10 @@ final class EQEngine: @unchecked Sendable {
 
     func setRouting(outputUID: String,
                     sampleRate: Double? = nil, force: Bool = false) throws {
-        guard let inputUID = Self.findBlackHoleUID() else {
+        guard let inputUID = Self.findLoopbackInputUID() else {
             throw NSError(domain: "EQEngine", code: -1,
                           userInfo: [NSLocalizedDescriptionKey:
-                            "BlackHole 2ch isn't installed. Earshot needs a virtual loopback driver to capture system audio. Install from existential.audio/blackhole."])
+                            "No 2-channel loopback driver found. Earshot can capture from BlackHole 2ch, VB-Cable, Soundflower (2ch), or Loopback Audio. Install one (BlackHole 2ch is free: existential.audio/blackhole)."])
         }
         if !force, isRunning, currentInputUID == inputUID, currentOutputUID == outputUID { return }
         stop()
@@ -192,16 +192,34 @@ final class EQEngine: @unchecked Sendable {
         Log.write("EQEngine.stop() complete (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
     }
 
-    // MARK: - BlackHole detection
+    // MARK: - Loopback detection
 
-    static func findBlackHoleUID() -> String? {
-        let candidates = ["BlackHole 2ch", "BlackHole 16ch", "BlackHole 64ch"]
-        for name in candidates {
-            if let dev = DeviceCatalog.device(named: name), dev.hasInput {
+    /// Preferred loopback-driver inputs in install-popularity order. Earshot
+    /// captures from whichever it finds first. Anything else matching
+    /// looksLikeLoopback with exactly two input channels is accepted as a
+    /// last-resort fallback.
+    private static let preferredLoopbackNames = [
+        "BlackHole 2ch",
+        "VB-Cable",
+        "Soundflower (2ch)",
+        "Loopback Audio",
+    ]
+
+    /// Returns the UID of the loopback input Earshot should capture from.
+    /// Prefers known 2-channel drivers; falls back to any 2-channel device
+    /// whose name matches a loopback hint. Multichannel BlackHole (16ch /
+    /// 64ch) is intentionally skipped — the capture pipeline is stereo.
+    static func findLoopbackInputUID() -> String? {
+        for name in preferredLoopbackNames {
+            if let dev = DeviceCatalog.device(named: name),
+               dev.hasInput,
+               DeviceCatalog.inputChannelCount(dev.id) == 2 {
                 return dev.uid
             }
         }
-        for dev in DeviceCatalog.inputs() where dev.name.contains("BlackHole") {
+        for dev in DeviceCatalog.inputs()
+            where DeviceCatalog.looksLikeLoopback(dev)
+                && DeviceCatalog.inputChannelCount(dev.id) == 2 {
             return dev.uid
         }
         return nil

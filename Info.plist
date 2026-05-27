@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2.0</string>
+    <string>1.3.0</string>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>5</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
@@ -27,7 +27,7 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Earshot reads system audio from BlackHole 2ch (a virtual loopback device) so it can apply the EQ before sending it to your output device. macOS classifies any audio input, including virtual ones, as a microphone, which is why this permission is required.</string>
+    <string>Earshot reads system audio from a 2-channel virtual loopback (BlackHole 2ch, VB-Cable, Soundflower, or Loopback Audio) so it can apply the EQ before sending it to your output device. macOS classifies any audio input, including virtual ones, as a microphone, which is why this permission is required.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSRequiresAquaSystemAppearance</key>

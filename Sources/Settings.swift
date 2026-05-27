@@ -129,7 +129,8 @@ enum AboutPanel {
         let credits = NSMutableAttributedString(string: """
         A menubar parametric EQ for macOS system audio.
 
-        Routes through BlackHole 2ch, drift-corrected with CAPlayThrough's
+        Routes through a 2-channel virtual loopback (BlackHole 2ch, VB-Cable,
+        Soundflower, or Loopback Audio), drift-corrected with CAPlayThrough's
         rate-scalar approach. AutoEQ headphone catalog by oratory1990 and
         Crinacle, used under their respective licences.
         """)

@@ -105,6 +105,26 @@ enum DeviceCatalog {
         loopbackDeviceNameHints.contains { d.name.localizedCaseInsensitiveContains($0) }
     }
 
+    /// Total input channels exposed by a device (summed across all input
+    /// streams). 0 for output-only devices. Used to skip multichannel
+    /// loopbacks (BlackHole 16ch/64ch) that don't match Earshot's stereo
+    /// capture pipeline.
+    static func inputChannelCount(_ devID: AudioDeviceID) -> Int {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioObjectPropertyScopeInput,
+            mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(devID, &address, 0, nil, &size) == noErr,
+              size > 0 else { return 0 }
+        let buf = UnsafeMutableRawPointer.allocate(byteCount: Int(size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { buf.deallocate() }
+        guard AudioObjectGetPropertyData(devID, &address, 0, nil, &size, buf) == noErr else { return 0 }
+        let abl = buf.assumingMemoryBound(to: AudioBufferList.self)
+        let buffers = UnsafeMutableAudioBufferListPointer(abl)
+        return buffers.reduce(0) { $0 + Int($1.mNumberChannels) }
+    }
+
     // MARK: private
 
     private static func stringProperty(_ devID: AudioDeviceID, selector: AudioObjectPropertySelector) -> String? {
