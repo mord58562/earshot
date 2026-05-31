@@ -77,6 +77,42 @@ struct HeadphoneEntry: Codable, Identifiable, Hashable {
         return parts.joined(separator: " · ")
     }
 
+    /// Form factor (over-ear vs in-ear-shaped) of the headphone this entry
+    /// measures. Used to split the target picker into two sections so the
+    /// user is choosing inside the right ear coupler.
+    enum FormFactor: String { case overEar, inEar }
+
+    var formFactor: FormFactor {
+        let s = (set ?? "").lowercased()
+        let r = (rig ?? "").lowercased()
+        // Explicit set names beat rig hints (e.g. a "5128 in-ear" set is
+        // an IEM rig with a 5128 coupler).
+        if s.contains("in-ear") || s.contains("iem") || s.contains("earbud") {
+            return .inEar
+        }
+        if s.contains("over-ear") { return .overEar }
+        // Rig fallback. 711 and KB006x couplers are IEM-side; GRAS / KEMAR
+        // / HMS / EARS / B&K 5128 (default) are HP-side.
+        if r.contains("711") || r.contains("kb006x") || r.contains("60318-4") {
+            return .inEar
+        }
+        return .overEar
+    }
+
+    /// Which target-picker section this target name belongs in.
+    static func formFactor(forTarget target: String) -> FormFactor {
+        let s = target.lowercased()
+        // Over-ear-shaped targets: anything with "OE" or "over-ear" plus
+        // the diffuse / free field family (speaker-derived, conventionally
+        // applied to over-ear).
+        if s.contains("oe") || s.contains("over-ear")
+            || s.contains("diffuse") || s.contains("free field") {
+            return .overEar
+        }
+        // Everything Harman in-ear, IEF, JM-1, AutoEQ IE.
+        return .inEar
+    }
+
     /// Parse an AutoEQ raw URL of the form
     ///   .../results/<measurer>/<set>/<headphone>/<headphone>%20ParametricEQ.txt
     /// to extract the set name and infer rig + target from common

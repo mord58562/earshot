@@ -1069,26 +1069,25 @@ private struct ToolbarButton: View {
 private struct PresetList: View {
     @ObservedObject var state: AppState
     @Binding var renameTarget: EQPreset?
-    /// Reorder is a mode, not a permanent affordance - the grip handle,
-    /// drag, and tap-to-suppress only appear while this is true. Default
-    /// is off so the day-to-day "click a row to load" interaction stays
-    /// uncluttered. Hoisted to PopoverRoot? No - the mode is purely
-    /// scoped to this list, and persisting it across closes would be
-    /// confusing (you'd open the popover and find rows non-clickable
-    /// because last time you were reordering).
+    /// Reorder is a mode, not a permanent affordance. Entered from any
+    /// row's ellipsis menu ("Reorder presets…"). Exited via the inline
+    /// Done pill that appears in the slim overlay when the mode is on.
+    /// Out of mode: no extra chrome - the list reads exactly as it does
+    /// every other time you open it.
     @State private var reordering: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            if state.presets.count >= 2 {
-                reorderHeader
-            }
+        ZStack(alignment: .top) {
             ScrollView {
                 VStack(spacing: 0) {
+                    // Padding-only spacer so the first row clears the
+                    // floating "Done" overlay when reorder mode is on.
+                    // Avoids the rows visually slamming into the bar.
+                    if reordering { Color.clear.frame(height: 26) }
                     ForEach(Array(state.presets.enumerated()), id: \.element.id) { idx, p in
                         PresetRow(preset: p, index: idx, state: state,
                                   renameTarget: $renameTarget,
-                                  reordering: reordering)
+                                  reordering: $reordering)
                         if p.id != state.presets.last?.id {
                             Divider().opacity(0.12)
                         }
@@ -1102,37 +1101,34 @@ private struct PresetList: View {
                 }
             }
             .frame(maxHeight: 180)
+
+            // Mode-only inline bar. Sits on top of the list (not above it)
+            // so the row real estate is preserved when not in mode.
+            if reordering {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Drag rows to reorder")
+                        .font(.system(size: 10, weight: .medium))
+                    Spacer()
+                    Button("Done") { reordering = false }
+                        .controlSize(.small)
+                        .buttonStyle(.borderless)
+                        .keyboardShortcut(.cancelAction)
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(.thickMaterial)
+                .overlay(
+                    Rectangle().fill(Color.accentColor.opacity(0.25))
+                        .frame(height: 0.5),
+                    alignment: .bottom)
+            }
         }
-        // Auto-exit reorder mode if the user runs out of rows to reorder
-        // (deleted them all down to one). Otherwise the mode would stick
-        // around with nothing to do.
         .onChange(of: state.presets.count) { count in
             if reordering && count < 2 { reordering = false }
         }
-    }
-
-    @ViewBuilder
-    private var reorderHeader: some View {
-        HStack(spacing: 6) {
-            if reordering {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                Text("Drag rows to reorder")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button(reordering ? "Done" : "Reorder") {
-                reordering.toggle()
-            }
-            .controlSize(.small)
-            .buttonStyle(.borderless)
-            .foregroundStyle(reordering ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(reordering ? Color.accentColor.opacity(0.05) : Color.clear)
     }
 }
 
@@ -1141,7 +1137,7 @@ private struct PresetRow: View {
     let index: Int
     @ObservedObject var state: AppState
     @Binding var renameTarget: EQPreset?
-    let reordering: Bool
+    @Binding var reordering: Bool
     @State private var isDropTarget: Bool = false
 
     var body: some View {
@@ -1163,6 +1159,10 @@ private struct PresetRow: View {
                 Button("Update with current EQ") { state.updatePreset(preset.id) }
                 Button("Rename…") { renameTarget = preset }
                 Button("Export…") { _ = exportPresetToFile(preset, state: state) }
+                if state.presets.count >= 2 {
+                    Divider()
+                    Button("Reorder presets…") { reordering = true }
+                }
                 Divider()
                 Button("Delete", role: .destructive) { state.deletePreset(preset.id) }
             } label: {
@@ -2058,114 +2058,38 @@ private struct RenamePresetSheet: View {
     }
 }
 
+/// Single filter applied to the catalog list. State machine instead of
+/// two independent toggles so picking a specific target also implicitly
+/// scopes the form factor (no contradictory states like "in-ear" +
+/// "Harman 2018 OE", which would always return zero results).
+private enum CatalogFilter: Equatable {
+    case none
+    case allOverEar
+    case allInEar
+    case specific(target: String)
+}
+
 private struct HeadphoneSearchSheet: View {
     @ObservedObject var state: AppState
     var onClose: () -> Void
     @State private var query: String = ""
     @State private var didAutoRefresh = false
-    /// Target-curve filter. `nil` means "all targets". The user picks
-    /// from whichever targets appear in the loaded catalog so we never
-    /// show a stale option (e.g. the catalog hasn't been refreshed since
-    /// AutoEQ added a new target).
-    @State private var targetFilter: String? = nil
+    @State private var filter: CatalogFilter = .none
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Find a preset").font(.headline)
-                Spacer()
-                Button("Refresh catalog") {
-                    Task { await state.refreshHeadphoneIndex() }
-                }
-                .disabled(state.headphoneFetchInProgress)
-                Button("Done", action: onClose)
-                    .keyboardShortcut(.cancelAction)
-            }
-
-            // Search field. Headphone model and target curve are the two
-            // axes that almost always determine which preset the user
-            // wants - the second axis lives in the filter strip below.
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Brand or model", text: $query)
-                    .textFieldStyle(.plain)
-            }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
-
-            // Target-curve pills. Horizontal scroll because the set can
-            // grow into the dozens as squig sources expand; All sits at
-            // the leading edge so the default state stays one click away.
-            if !availableTargets.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        TargetPill(label: "All targets",
-                                   selected: targetFilter == nil) {
-                            targetFilter = nil
-                        }
-                        ForEach(availableTargets, id: \.self) { t in
-                            TargetPill(label: t,
-                                       selected: targetFilter == t) {
-                                targetFilter = t
-                            }
-                        }
-                    }
-                }
-            }
-
-            List {
-                let userMatches = matchingUserPresets()
-                if !userMatches.isEmpty {
-                    Section("Your presets · \(userMatches.count)") {
-                        ForEach(userMatches) { p in
-                            UserPresetSearchRow(preset: p, state: state, onClose: onClose)
-                                .listRowInsets(EdgeInsets())
-                                .listRowSeparator(.hidden)
-                        }
-                    }
-                }
-                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
-                    Section("Catalog · \(state.headphoneIndex.count)") {
-                        Text("Type a brand or model to search.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 12,
-                                                      bottom: 8, trailing: 12))
-                            .listRowSeparator(.hidden)
-                    }
-                } else {
-                    let catalogMatches = filteredCatalog()
-                    Section("Catalog · \(catalogMatches.count)") {
-                        if catalogMatches.isEmpty {
-                            Text("No matches. Try Refresh, clear the target filter, or check spelling.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .listRowInsets(EdgeInsets(top: 8, leading: 12,
-                                                          bottom: 8, trailing: 12))
-                                .listRowSeparator(.hidden)
-                        } else {
-                            ForEach(catalogMatches) { entry in
-                                CatalogSearchRow(entry: entry, state: state, onClose: onClose)
-                                    .listRowInsets(EdgeInsets())
-                                    .listRowSeparator(.hidden)
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.inset)
-            .scrollContentBackground(.hidden)
-            .frame(height: 320)
-            if state.headphoneFetchInProgress {
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("Fetching…").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            searchField
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+            targetSections
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+            Divider().opacity(0.18).padding(.top, 12)
+            resultsList
+            footer
         }
-        .padding(20)
-        .frame(width: 480)
+        .frame(width: 540)
         .task {
             if !didAutoRefresh, HeadphoneIndex.cacheIsStale() {
                 didAutoRefresh = true
@@ -2174,19 +2098,248 @@ private struct HeadphoneSearchSheet: View {
         }
     }
 
-    /// Distinct target curves present in the currently loaded index,
-    /// sorted with the Harman family at the top because that's the
-    /// default a typical user actually wants. Empty until the catalog
-    /// is refreshed at least once with metadata-aware code.
-    private var availableTargets: [String] {
-        let targets = state.headphoneIndex.compactMap { $0.target }.filter { !$0.isEmpty }
-        let unique = Array(Set(targets))
-        return unique.sorted { a, b in
-            let ah = a.hasPrefix("Harman")
-            let bh = b.hasPrefix("Harman")
-            if ah != bh { return ah }
-            return a.localizedStandardCompare(b) == .orderedAscending
+    // MARK: Header
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("Find a preset")
+                .font(.system(size: 14, weight: .semibold))
+            Spacer()
+            // Refresh demoted to a quiet circular-arrow button; the label
+            // was the loudest thing in the row and almost never tapped.
+            Button {
+                Task { await state.refreshHeadphoneIndex() }
+            } label: {
+                if state.headphoneFetchInProgress {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                        .frame(width: 18, height: 18)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(state.headphoneFetchInProgress)
+            .help("Refresh catalog from network")
+
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+            .help("Close")
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Search field
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            TextField("Brand or model", text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(.quinary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(.quaternary.opacity(0.6), lineWidth: 0.5)
+        )
+    }
+
+    // MARK: Target sections
+
+    @ViewBuilder
+    private var targetSections: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            targetRow(title: "Over-ear targets",
+                      allFilter: .allOverEar,
+                      targets: overEarTargets)
+            targetRow(title: "In-ear targets",
+                      allFilter: .allInEar,
+                      targets: inEarTargets)
+        }
+    }
+
+    @ViewBuilder
+    private func targetRow(title: String,
+                           allFilter: CatalogFilter,
+                           targets: [String]) -> some View {
+        if !targets.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(.tertiary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        // The "all over-ear / all in-ear" pill lets the
+                        // user scope to a form factor without committing
+                        // to a specific target curve. Toggle behaviour:
+                        // tapping the active pill clears the filter.
+                        TargetPill(label: "All", selected: filter == allFilter) {
+                            filter = (filter == allFilter) ? .none : allFilter
+                        }
+                        ForEach(targets, id: \.self) { t in
+                            let isSel = filter == .specific(target: t)
+                            TargetPill(label: t, selected: isSel) {
+                                filter = isSel ? .none : .specific(target: t)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Results
+
+    private var resultsList: some View {
+        List {
+            let userMatches = matchingUserPresets()
+            if !userMatches.isEmpty {
+                Section {
+                    ForEach(userMatches) { p in
+                        UserPresetSearchRow(preset: p, state: state, onClose: onClose)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    sectionLabel("Your presets · \(userMatches.count)")
+                }
+            }
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty && filter == .none {
+                Section {
+                    Text("Type a brand or model, or pick a target curve above.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 18,
+                                                  bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                } header: {
+                    sectionLabel("Catalog · \(state.headphoneIndex.count)")
+                }
+            } else {
+                let matches = filteredCatalog()
+                Section {
+                    if matches.isEmpty {
+                        Text("No matches. Try refresh, change the target, or check spelling.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 18,
+                                                      bottom: 8, trailing: 12))
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(matches.prefix(400)) { entry in
+                            CatalogSearchRow(entry: entry, state: state, onClose: onClose)
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                        }
+                        if matches.count > 400 {
+                            Text("\(matches.count - 400) more - narrow the search.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 18,
+                                                          bottom: 6, trailing: 12))
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                } header: {
+                    sectionLabel("Catalog · \(matches.count)")
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .frame(height: 340)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Footer
+
+    @ViewBuilder
+    private var footer: some View {
+        if case .specific(let t) = filter {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("Filtered to \(t)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Clear") { filter = .none }
+                    .controlSize(.small)
+                    .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
+            .background(Color.accentColor.opacity(0.05))
+        }
+    }
+
+    // MARK: Data
+
+    private var availableTargets: [String] {
+        let raw = state.headphoneIndex.compactMap { $0.target }.filter { !$0.isEmpty }
+        return Array(Set(raw))
+    }
+
+    private var overEarTargets: [String] {
+        availableTargets
+            .filter { HeadphoneEntry.formFactor(forTarget: $0) == .overEar }
+            .sorted(by: targetSortOrder)
+    }
+
+    private var inEarTargets: [String] {
+        availableTargets
+            .filter { HeadphoneEntry.formFactor(forTarget: $0) == .inEar }
+            .sorted(by: targetSortOrder)
+    }
+
+    /// Harman family first (the default a typical user picks), then
+    /// alphabetical. Stable so the pill order doesn't shuffle when the
+    /// catalog updates mid-session.
+    private func targetSortOrder(_ a: String, _ b: String) -> Bool {
+        let ah = a.hasPrefix("Harman")
+        let bh = b.hasPrefix("Harman")
+        if ah != bh { return ah }
+        return a.localizedStandardCompare(b) == .orderedAscending
     }
 
     private func matchingUserPresets() -> [EQPreset] {
@@ -2197,7 +2350,13 @@ private struct HeadphoneSearchSheet: View {
 
     private func filteredCatalog() -> [HeadphoneEntry] {
         var matches = state.searchHeadphones(query)
-        if let t = targetFilter {
+        switch filter {
+        case .none: break
+        case .allOverEar:
+            matches = matches.filter { $0.formFactor == .overEar }
+        case .allInEar:
+            matches = matches.filter { $0.formFactor == .inEar }
+        case .specific(let t):
             matches = matches.filter { $0.target == t }
         }
         return matches
@@ -2208,20 +2367,27 @@ private struct TargetPill: View {
     let label: String
     let selected: Bool
     let action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-                .padding(.horizontal, 9)
+                .foregroundStyle(selected
+                    ? AnyShapeStyle(Color.white)
+                    : (hovering ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)))
+                .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 99, style: .continuous)
-                        .fill(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quinary))
+                        .fill(selected
+                            ? AnyShapeStyle(Color.accentColor)
+                            : AnyShapeStyle(hovering ? .quaternary : .quinary))
                 )
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.08), value: hovering)
     }
 }
 
@@ -2269,32 +2435,71 @@ private struct CatalogSearchRow: View {
     let entry: HeadphoneEntry
     @ObservedObject var state: AppState
     var onClose: () -> Void
+    @State private var hovering = false
+    @State private var importing = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(entry.name).font(.system(size: 12, weight: .medium))
-                // Qualifier line - measurer + rig + target where known.
-                // Keeps a clear read on what the user is about to import
-                // (a 711-measured PEQ vs a 5128 PEQ vs an oratory hand-
-                // tune are very different things even for the same set).
-                Text(entry.qualifier)
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer()
-            Button("Import") {
-                Task {
-                    await state.importFromHeadphone(entry)
-                    onClose()
+        Button(action: doImport) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(entry.qualifier)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: 8)
+                if importing {
+                    ProgressView().controlSize(.small).scaleEffect(0.6)
+                        .frame(width: 24)
+                } else {
+                    FormFactorBadge(formFactor: entry.formFactor)
+                        .opacity(hovering ? 1 : 0.7)
                 }
             }
-            .controlSize(.small)
-            .disabled(state.headphoneFetchInProgress)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 18)
+            .contentShape(Rectangle())
+            .background(hovering ? Color.accentColor.opacity(0.07) : Color.clear)
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 8)
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .disabled(state.headphoneFetchInProgress)
+    }
+
+    private func doImport() {
+        importing = true
+        Task {
+            await state.importFromHeadphone(entry)
+            importing = false
+            onClose()
+        }
+    }
+}
+
+/// Compact OE / IE chip on the trailing edge of a catalog row. Quiet
+/// by default, picks up a fill on hover. Tells the user at a glance
+/// whether they're looking at an in-ear or over-ear measurement
+/// without having to parse the rig string in the qualifier line.
+private struct FormFactorBadge: View {
+    let formFactor: HeadphoneEntry.FormFactor
+
+    var body: some View {
+        Text(formFactor == .overEar ? "OE" : "IE")
+            .font(.system(size: 9, weight: .semibold))
+            .tracking(0.4)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(.quinary)
+            )
     }
 }
 
