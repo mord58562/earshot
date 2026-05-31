@@ -1985,16 +1985,17 @@ private struct HeadphoneSearchSheet: View {
     var onClose: () -> Void
     @State private var query: String = ""
     @State private var didAutoRefresh = false
+    /// Target-curve filter. `nil` means "all targets". The user picks
+    /// from whichever targets appear in the loaded catalog so we never
+    /// show a stale option (e.g. the catalog hasn't been refreshed since
+    /// AutoEQ added a new target).
+    @State private var targetFilter: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Find a preset").font(.headline)
                 Spacer()
-                // Plain-text labels on both so they're identical height -
-                // a `Label` with an SF Symbol made Refresh taller than the
-                // text-only Done button and the icon never aligned cleanly
-                // with the text baseline either.
                 Button("Refresh catalog") {
                     Task { await state.refreshHeadphoneIndex() }
                 }
@@ -2002,6 +2003,10 @@ private struct HeadphoneSearchSheet: View {
                 Button("Done", action: onClose)
                     .keyboardShortcut(.cancelAction)
             }
+
+            // Search field. Headphone model and target curve are the two
+            // axes that almost always determine which preset the user
+            // wants - the second axis lives in the filter strip below.
             HStack {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Brand or model", text: $query)
@@ -2009,11 +2014,27 @@ private struct HeadphoneSearchSheet: View {
             }
             .padding(8)
             .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
-            // List virtualizes far better than ScrollView+LazyVStack for
-            // ~2000-row catalogs. We also cap the catalog rendering until
-            // a query is typed - dumping all 1961 entries into the view
-            // hierarchy by default was what made initial scroll glitchy
-            // (LazyVStack pre-measures section sizes even when off-screen).
+
+            // Target-curve pills. Horizontal scroll because the set can
+            // grow into the dozens as squig sources expand; All sits at
+            // the leading edge so the default state stays one click away.
+            if !availableTargets.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        TargetPill(label: "All targets",
+                                   selected: targetFilter == nil) {
+                            targetFilter = nil
+                        }
+                        ForEach(availableTargets, id: \.self) { t in
+                            TargetPill(label: t,
+                                       selected: targetFilter == t) {
+                                targetFilter = t
+                            }
+                        }
+                    }
+                }
+            }
+
             List {
                 let userMatches = matchingUserPresets()
                 if !userMatches.isEmpty {
@@ -2027,7 +2048,7 @@ private struct HeadphoneSearchSheet: View {
                 }
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty {
-                    Section("AutoEQ catalog · \(state.headphoneIndex.count)") {
+                    Section("Catalog · \(state.headphoneIndex.count)") {
                         Text("Type a brand or model to search.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
@@ -2036,10 +2057,10 @@ private struct HeadphoneSearchSheet: View {
                             .listRowSeparator(.hidden)
                     }
                 } else {
-                    let catalogMatches = state.searchHeadphones(query)
-                    Section("AutoEQ catalog · \(catalogMatches.count)") {
+                    let catalogMatches = filteredCatalog()
+                    Section("Catalog · \(catalogMatches.count)") {
                         if catalogMatches.isEmpty {
-                            Text("No matches. Try Refresh, or check spelling.")
+                            Text("No matches. Try Refresh, clear the target filter, or check spelling.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                                 .listRowInsets(EdgeInsets(top: 8, leading: 12,
@@ -2066,10 +2087,8 @@ private struct HeadphoneSearchSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 460)
+        .frame(width: 480)
         .task {
-            // Auto-refresh once per session if the cache is empty or stale,
-            // so the bundled ~32-entry list isn't a permanent ceiling.
             if !didAutoRefresh, HeadphoneIndex.cacheIsStale() {
                 didAutoRefresh = true
                 await state.refreshHeadphoneIndex()
@@ -2077,10 +2096,54 @@ private struct HeadphoneSearchSheet: View {
         }
     }
 
+    /// Distinct target curves present in the currently loaded index,
+    /// sorted with the Harman family at the top because that's the
+    /// default a typical user actually wants. Empty until the catalog
+    /// is refreshed at least once with metadata-aware code.
+    private var availableTargets: [String] {
+        let targets = state.headphoneIndex.compactMap { $0.target }.filter { !$0.isEmpty }
+        let unique = Array(Set(targets))
+        return unique.sorted { a, b in
+            let ah = a.hasPrefix("Harman")
+            let bh = b.hasPrefix("Harman")
+            if ah != bh { return ah }
+            return a.localizedStandardCompare(b) == .orderedAscending
+        }
+    }
+
     private func matchingUserPresets() -> [EQPreset] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if q.isEmpty { return state.presets }
         return state.presets.filter { $0.name.lowercased().contains(q) }
+    }
+
+    private func filteredCatalog() -> [HeadphoneEntry] {
+        var matches = state.searchHeadphones(query)
+        if let t = targetFilter {
+            matches = matches.filter { $0.target == t }
+        }
+        return matches
+    }
+}
+
+private struct TargetPill: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 99, style: .continuous)
+                        .fill(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quinary))
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -2133,8 +2196,14 @@ private struct CatalogSearchRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.name).font(.system(size: 12, weight: .medium))
-                Text(entry.measurer)
+                // Qualifier line - measurer + rig + target where known.
+                // Keeps a clear read on what the user is about to import
+                // (a 711-measured PEQ vs a 5128 PEQ vs an oratory hand-
+                // tune are very different things even for the same set).
+                Text(entry.qualifier)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             Spacer()
             Button("Import") {

@@ -8,16 +8,137 @@ private enum SHA256 {
     }
 }
 
-/// Index of headphones whose oratory1990 measurements live in the AutoEQ
-/// repository. Each entry points at a raw `ParametricEQ.txt` URL on GitHub.
-/// We bundle a curated index (popular models) and fall back to fetching the
-/// full directory listing on demand.
+/// Index of headphones whose measurements live in either the AutoEQ
+/// repository OR a squig.link database. Each entry points at a raw
+/// preset/measurement URL; the import path resolves it to a PEQ at
+/// runtime. We bundle a curated snapshot and refresh from the network
+/// on demand.
 struct HeadphoneEntry: Codable, Identifiable, Hashable {
     var name: String
-    var measurer: String  // "oratory1990", "harman", "crinacle", etc.
+    var measurer: String  // "oratory1990", "crinacle", "super-review", "hangout-5128", "listener", "vsg", ...
     var rawTxtURL: String
+    /// AutoEQ `set` directory name when the entry comes from AutoEQ
+    /// (e.g. "harman_over-ear_2018", "711 in-ear"). For squig-direct
+    /// entries this is the squig site identifier (e.g. "vsg.squig.link").
+    var set: String?
+    /// Measurement rig in human-readable form: "GRAS 43AG", "IEC 60318-4
+    /// (711)", "B&K 5128", "KB006x", etc. Derived from `set` on bundled
+    /// data, supplied directly for squig-direct entries.
+    var rig: String?
+    /// Target curve the preset is tuned against: "Harman 2018 OE",
+    /// "Harman 2019 IE", "IEF Neutral", "JM-1", etc. Optional - some
+    /// AutoEQ sets don't encode the target in the folder name.
+    var target: String?
 
     var id: String { rawTxtURL }
+
+    /// Decoding tolerates the older bundled schema that had only
+    /// {name, measurer, rawTxtURL}. New fields default to nil and the
+    /// loader fills them by inspecting the URL.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.measurer = try c.decode(String.self, forKey: .measurer)
+        self.rawTxtURL = try c.decode(String.self, forKey: .rawTxtURL)
+        self.set = try c.decodeIfPresent(String.self, forKey: .set)
+        self.rig = try c.decodeIfPresent(String.self, forKey: .rig)
+        self.target = try c.decodeIfPresent(String.self, forKey: .target)
+        // Backfill the derived fields from the URL path when the bundled
+        // JSON predates the schema. Cheap, deterministic, runs once per
+        // entry at load time.
+        if (set == nil || rig == nil || target == nil),
+           let derived = HeadphoneEntry.deriveMetadata(rawURL: rawTxtURL) {
+            if self.set == nil    { self.set    = derived.set }
+            if self.rig == nil    { self.rig    = derived.rig }
+            if self.target == nil { self.target = derived.target }
+        }
+    }
+
+    init(name: String, measurer: String, rawTxtURL: String,
+         set: String? = nil, rig: String? = nil, target: String? = nil) {
+        self.name = name
+        self.measurer = measurer
+        self.rawTxtURL = rawTxtURL
+        self.set = set
+        self.rig = rig
+        self.target = target
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, measurer, rawTxtURL, set, rig, target
+    }
+
+    /// Short label for the search UI: "oratory1990 · GRAS · Harman 2018 OE".
+    /// Skips fields that aren't known so old entries still read cleanly.
+    var qualifier: String {
+        var parts: [String] = [measurer]
+        if let rig = rig, !rig.isEmpty { parts.append(rig) }
+        if let target = target, !target.isEmpty { parts.append(target) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Parse an AutoEQ raw URL of the form
+    ///   .../results/<measurer>/<set>/<headphone>/<headphone>%20ParametricEQ.txt
+    /// to extract the set name and infer rig + target from common
+    /// patterns. Returns nil for non-AutoEQ URLs.
+    static func deriveMetadata(rawURL: String) -> (set: String, rig: String?, target: String?)? {
+        guard let url = URL(string: rawURL) else { return nil }
+        let comps = url.pathComponents
+        guard let idx = comps.firstIndex(of: "results"),
+              comps.count > idx + 3 else { return nil }
+        let setRaw = comps[idx + 2]
+            .removingPercentEncoding ?? comps[idx + 2]
+        return (set: setRaw, rig: rigFromSet(setRaw), target: targetFromSet(setRaw))
+    }
+
+    /// Heuristic. AutoEQ folder names are not formal, but the conventions
+    /// are stable enough to catch the common cases. Unknown sets return
+    /// nil so the UI just omits the rig column rather than guessing.
+    private static func rigFromSet(_ set: String) -> String? {
+        let lower = set.lowercased()
+        if lower.contains("5128") { return "B&K 5128" }
+        if lower.contains("gras 43ag-7") || lower.contains("gras_43ag-7") { return "GRAS 43AG-7" }
+        if lower.contains("gras") { return "GRAS 43AG" }
+        if lower.contains("kb006x") { return "KB006x" }
+        if lower.contains("ears") { return "EARS" }
+        if lower.contains("hms ii") || lower.contains("hms_ii") { return "HMS II.3" }
+        if lower.contains("kemar") { return "KEMAR" }
+        if lower.contains("711") || lower.contains("in-ear") || lower.contains("in_ear") {
+            return "IEC 60318-4 (711)"
+        }
+        return nil
+    }
+
+    private static func targetFromSet(_ set: String) -> String? {
+        let lower = set.lowercased()
+        // Be specific before generic.
+        if lower.contains("harman_in-ear_2019_v2") || lower.contains("harman 2019 v2") {
+            return "Harman 2019 IE v2"
+        }
+        if lower.contains("harman_in-ear_2019") || lower.contains("harman 2019") {
+            return "Harman 2019 IE"
+        }
+        if lower.contains("harman_in-ear_2017") || lower.contains("harman 2017 ie") {
+            return "Harman 2017 IE"
+        }
+        if lower.contains("harman_over-ear_2018") || lower.contains("harman 2018") {
+            return "Harman 2018 OE"
+        }
+        if lower.contains("harman_over-ear_2015") || lower.contains("harman 2015") {
+            return "Harman 2015 OE"
+        }
+        if lower.contains("autoeq_in-ear") { return "AutoEQ IE" }
+        if lower.contains("autoeq_over-ear") { return "AutoEQ OE" }
+        if lower.contains("ief") { return "IEF Neutral" }
+        if lower.contains("jm-1") || lower.contains("jm1") { return "JM-1" }
+        if lower.contains("diffuse field") || lower.contains("diffuse_field") {
+            return "Diffuse Field"
+        }
+        if lower.contains("free field") || lower.contains("free_field") {
+            return "Free Field"
+        }
+        return nil
+    }
 }
 
 enum HeadphoneIndex {
@@ -35,7 +156,36 @@ enum HeadphoneIndex {
     /// de-dupe: the first measurer for a given headphone name wins.
     private static let apiBase = "https://api.github.com/repos/jaakkopasanen/AutoEq/contents/results"
     private static let rawBase = "https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results"
-    private static let measurers: [String] = ["oratory1990", "crinacle"]
+    /// Every measurer AutoEQ currently mirrors. Order is preference for
+    /// de-dupe (first-hit wins) - oratory1990's hand-tuned PEQs come first
+    /// because they're the gold standard where they exist; the others fill
+    /// out the long tail. Sources that 404 are silently skipped so the
+    /// refresh keeps working as AutoEQ adds/removes directories.
+    private static let measurers: [String] = [
+        "oratory1990",
+        "crinacle",
+        "Super Review",
+        "innerfidelity",
+        "rtings",
+        "Kuulokenurkka",
+        "DHRME",
+        "HypetheSonics",
+        "jaytiss",
+        "RikudouGoku",
+        "kr0mka",
+        "Bakkwatan",
+        "Filk",
+        "Harpo",
+        "ToneDeafMonk",
+        "Headphone.com Legacy",
+        "Hi End Portable",
+        "Ted's Squig Hoard",
+        "Auriculares Argentina",
+        "Regan Cipher",
+        "freeryder05",
+        "Fahryst",
+        "Kazi",
+    ]
     private static let cacheStaleAfter: TimeInterval = 7 * 24 * 60 * 60   // 7 days
 
     static func load() -> [HeadphoneEntry] {
@@ -56,6 +206,9 @@ enum HeadphoneIndex {
     /// Fetches the live AutoEQ catalog from GitHub across all configured
     /// measurers and writes it to the cache. Throws on network/rate-limit
     /// failure; the bundled list still works as fallback in that case.
+    /// De-dupes by `(name, target)` so the same headphone measured by
+    /// different reviewers shows up once per target curve rather than
+    /// being squashed to a single entry.
     static func refreshFromNetwork() async throws -> [HeadphoneEntry] {
         var entries: [HeadphoneEntry] = []
         for measurer in measurers {
@@ -76,26 +229,73 @@ enum HeadphoneIndex {
                         let folderEnc = percentEncode(hp.name)
                         let txtName = "\(percentEncode(hp.name))%20ParametricEQ.txt"
                         let raw = "\(measurerRaw)/\(percentEncode(set.name))/\(folderEnc)/\(txtName)"
-                        entries.append(HeadphoneEntry(name: hp.name,
-                                                      measurer: measurer,
-                                                      rawTxtURL: raw))
+                        let derived = HeadphoneEntry.deriveMetadata(rawURL: raw)
+                        entries.append(HeadphoneEntry(
+                            name: hp.name,
+                            measurer: measurer,
+                            rawTxtURL: raw,
+                            set: derived?.set ?? set.name,
+                            rig: derived?.rig,
+                            target: derived?.target))
                     }
                 } catch {
                     Log.write("AutoEQ listing for \(measurer)/\(set.name) failed: \(error.localizedDescription)")
                 }
             }
         }
-        // De-dupe by name keeping the first hit. Because measurers iterate
-        // in declared order, the most-trusted source (oratory1990) wins
-        // when a headphone is measured by multiple parties.
+        // De-dupe by (name, target). Same name + same target across
+        // measurers collapses to the first hit (preference: oratory1990
+        // first, then long-tail in declared order). Different targets
+        // for the same headphone (e.g. "HD 600 (Harman 2018)" and
+        // "HD 600 (oratory1990)") survive as separate rows so the user
+        // can pick the tuning they prefer instead of being forced into
+        // whichever measurement happened to come first.
         var seen = Set<String>()
-        let unique = entries.filter { seen.insert($0.name.lowercased()).inserted }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        if !unique.isEmpty {
-            saveCache(unique)
+        let unique = entries.filter {
+            let key = "\($0.name.lowercased())|\($0.target?.lowercased() ?? "")"
+            return seen.insert(key).inserted
         }
-        Log.write("AutoEQ refresh: \(unique.count) headphones across \(measurers.count) measurers")
-        return unique
+        .sorted {
+            let a = $0.name.localizedStandardCompare($1.name)
+            if a != .orderedSame { return a == .orderedAscending }
+            return ($0.target ?? "") < ($1.target ?? "")
+        }
+        // Pull live squig sources that AutoEQ does NOT mirror. Each source
+        // is fetched in parallel; any single failure (DNS hiccup, ATS, 404)
+        // is logged and skipped without poisoning the whole refresh.
+        var combined = unique
+        await withTaskGroup(of: [HeadphoneEntry].self) { group in
+            for source in SquigFetcher.liveSources {
+                group.addTask {
+                    do {
+                        let entries = try await SquigFetcher.fetchCatalog(source)
+                        Log.write("squig \(source.id): \(entries.count) entries")
+                        return entries
+                    } catch {
+                        Log.write("squig \(source.id) failed: \(error.localizedDescription)")
+                        return []
+                    }
+                }
+            }
+            for await batch in group {
+                combined.append(contentsOf: batch)
+            }
+        }
+        var seen2 = Set<String>()
+        let final = combined.filter {
+            let key = "\($0.name.lowercased())|\($0.measurer.lowercased())|\($0.target?.lowercased() ?? "")"
+            return seen2.insert(key).inserted
+        }
+        .sorted {
+            let a = $0.name.localizedStandardCompare($1.name)
+            if a != .orderedSame { return a == .orderedAscending }
+            return ($0.target ?? "") < ($1.target ?? "")
+        }
+        if !final.isEmpty {
+            saveCache(final)
+        }
+        Log.write("library refresh: \(final.count) entries (\(unique.count) AutoEQ + \(final.count - unique.count) squig-direct)")
+        return final
     }
 
     private struct GitHubItem: Codable {
@@ -146,9 +346,17 @@ enum HeadphoneIndex {
         }
     }
 
-    /// Download the ParametricEQ.txt for a given entry and parse it. Caches
-    /// the raw text under ~/Library/Caches/Earshot/.
+    /// Download the ParametricEQ.txt for a given entry and parse it,
+    /// OR fit a PEQ on-device when the entry comes from a squig source
+    /// that ships raw FR instead of pre-baked PEQ. Caches the raw text
+    /// under ~/Library/Caches/Earshot/ (squig fits cache the resolved
+    /// preset directly, not the FR data).
     static func fetchPreset(for entry: HeadphoneEntry) async throws -> EQPreset {
+        // Squig-direct entries take a different path: no ParametricEQ.txt
+        // exists; we fetch FR + target and run the on-device autofit.
+        if let source = SquigFetcher.liveSources.first(where: { $0.id == entry.measurer }) {
+            return try await SquigFetcher.fetchPreset(entry: entry, source: source)
+        }
         guard let url = URL(string: entry.rawTxtURL) else {
             throw URLError(.badURL)
         }
@@ -181,10 +389,24 @@ enum HeadphoneIndex {
         }
         switch AutoEQFormat.decode(text: text, defaultName: entry.name) {
         case .success(var preset):
-            preset.name = entry.name
+            // The user asked for imports to surface their target curve
+            // in the name (e.g. "Sennheiser HD 600 (Harman 2018 OE)").
+            // Falls back to a measurer-only suffix when the target isn't
+            // known, and to the bare name when neither is known.
+            preset.name = nameWithQualifier(entry: entry)
             return preset
         case .failure(let error):
             throw error
         }
+    }
+
+    static func nameWithQualifier(entry: HeadphoneEntry) -> String {
+        if let target = entry.target, !target.isEmpty {
+            return "\(entry.name) (\(target))"
+        }
+        if !entry.measurer.isEmpty {
+            return "\(entry.name) (\(entry.measurer))"
+        }
+        return entry.name
     }
 }

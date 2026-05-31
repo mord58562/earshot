@@ -31,6 +31,7 @@ SOURCES=(
   Sources/InputCapture.swift
   Sources/EQEngine.swift
   Sources/AutoEQFormat.swift
+  Sources/SquigFetcher.swift
   Sources/HeadphoneIndex.swift
   Sources/AppState.swift
   Sources/Icon.swift
