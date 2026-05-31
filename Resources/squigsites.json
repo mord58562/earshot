@@ -1,0 +1,1425 @@
+[
+    {
+		"username": "achoreviews",
+		"name": "Acho Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "aden",
+		"name": "aden",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+    {
+		"username": "adri-n",
+		"name": "Adri-N",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "aftersound",
+		"name": "Aftersound",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "animagus",
+		"name": "Animagus",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "ankramutt",
+		"name": "Ankramutt",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "aquaphobic",
+		"name": "Aquaphobic",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "arc",
+		"name": "Arc",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "atechreviews",
+		"name": "ATechReviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "arn",
+		"name": "audioAI",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "audioamigo",
+		"name": "Audio Amigo",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "theaudiostore",
+		"name": "The Audio Store",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "auricularesargentina",
+		"name": "Auriculares Argentina",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "avishai",
+		"name": "avishai",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "awsmdanny",
+		"name": "AWSMDanny",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bakkwatan",
+		"name": "Bakkwatan",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "banzai1122",
+		"name": "banzai1122",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bassyalexander",
+		"name": "bassy Alexander",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bassaudio",
+		"name": "Bass Audio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bedrock",
+		"name": "Bedrock Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "boizoff",
+		"name": "boizoff",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "breampike",
+		"name": "breampike",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bryaudioreviews",
+		"name": "Bry Audio Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "bukanaudiophile",
+		"name": "BukanAudiophile",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "cammyfi",
+		"name": "CammyFi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones-clone/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/iems/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "capraaudio",
+		"name": "Capra Audio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/Headphones/"
+            }
+        ]
+	},
+	{
+		"username": "csi-zone",
+		"name": "CSI-ZONE",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "false"
+            }
+        ]
+	},
+	{
+		"username": "dchpgall",
+		"name": "Dcinside Headphone Gallery",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "dentreviews",
+		"name": "dentReviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "digaoreviews",
+		"name": "Digão Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "dhrme",
+		"name": "DHRME",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "doltonius",
+		"name": "Doltonius",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "ducbloke",
+		"name": "DucBloke",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "dl",
+		"name": "Dung Le",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "ekaudio",
+		"name": "EKaudio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "eliseaudio",
+		"name": "Elise Audio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "fahryst",
+		"name": "Fahryst",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "earphonesarchive",
+		"name": "Earphones Archive (IEMs)",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "5128",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "earphonesarchive",
+		"name": "Earphones Archive (headphones)",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "5128",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "elrics",
+		"name": "Elrics",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "enemyspider",
+		"name": "EnemySpider",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "eplv",
+		"name": "EPLV",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "fernandagunsan",
+		"name": "Fernanda Gunsan",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "false"
+            }
+        ]
+	},
+	{
+		"username": "flare",
+		"name": "Flare",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "foxtoldmeso",
+		"name": "Fox Told Me So",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "freeryder05",
+		"name": "freeryder05",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "filk",
+		"name": "Filk",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/iems/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "gadgetgenerations",
+		"name": "Gadget Generations",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "gadgetrytech",
+		"name": "Gadgetry Tech",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headsets/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "crinacle",
+		"name": "Hangout.Audio",
+		"urlType": "altDomain",
+        "altDomain": "https://graph.hangout.audio",
+        "dbs": [
+            {
+                "type": "5128",
+                "folder": "/iem/5128/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/iem/711/",
+                "deltaReady": "true"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "hadoe",
+		"name": "Hadoe",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "Earbuds",
+                "folder": "/earbuds/"
+            }
+        ]
+	},
+	{
+		"username": "hana",
+		"name": "Hana",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "harpo",
+		"name": "Harpo",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "harutohiroki",
+		"name": "HarutoHiroki",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "hbb",
+		"name": "Hawaii Bad Boy",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "cqtek",
+		"name": "Hi End Portable",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "hobbytalk",
+		"name": "Hobby Talk",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "hoods",
+		"name": "Hoods",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "hore",
+		"name": "Hore",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "hu-fi",
+		"name": "Hu-Fi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "ianfann",
+		"name": "ianfann",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "ideru",
+		"name": "Ideru",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "iemocean",
+		"name": "IEM Ocean",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "iemworld",
+		"name": "IEM World",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "isaiahse",
+		"name": "Isaiah SE",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "jacstone",
+		"name": "Jacstone",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "jaraba",
+		"name": "JaRaBa",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "jaytiss",
+		"name": "Jaytiss",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "joshtbvo",
+		"name": "JoshTBVO",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "joycesreview",
+		"name": "Joyce's Review",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "kazi",
+		"name": "Kazi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "koi",
+		"name": "KOI",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "kr0mka",
+		"name": "kr0mka",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "kuping-sensi",
+		"name": "Kuping Sensi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "kuulokenurkka",
+		"name": "Kuulokenurkka",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "ish",
+		"name": "Kyle @ Den-Fi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "lestat",
+		"name": "Lestat",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "false"
+            }
+        ]
+	},
+	{
+		"username": "listener",
+		"name": "listener",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "5128",
+                "folder": "/5128/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/iems/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "loomynarty",
+		"name": "Loomynarty",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "lown-fi",
+		"name": "lown-fi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "melatonin",
+		"name": "Melatonin",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "lumerion",
+		"name": "Lumerion",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "mmagtech",
+		"name": "MMagTech",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "musicafe",
+		"name": "MusiCafé",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "nymz",
+		"name": "nymz",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+    {
+		"username": "obodio",
+		"name": "OB Odio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+    {
+		"username": "practiphile",
+		"name": "Practiphile",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+    {
+		"username": "pw",
+		"name": "Paul Wasabi",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "precog",
+		"name": "Precogvision",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "ragnarok",
+		"name": "Ragnarok",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "recode",
+		"name": "Recode",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "regancipher",
+		"name": "Regan Cipher",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "rg",
+		"name": "RikudouGoku",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "riz",
+		"name": "Riz",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+    {
+		"username": "samreviews",
+		"name": "Sam Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+    {
+		"username": "scboy",
+		"name": "SCBoy",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "seanwee",
+		"name": "Sean Wee",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "silicagel",
+		"name": "SilicaGel",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "Earbuds",
+                "folder": "/earbuds/"
+            }
+        ]
+	},
+	{
+		"username": "sl0the",
+		"name": "sl0the",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "smirk",
+		"name": "Smirk",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "soundcheck39",
+		"name": "Soundcheck39",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "soundignity",
+		"name": "Soundignity",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "suporsalad",
+		"name": "Side Salad Audio",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": true
+            }
+        ]
+	},
+	{
+		"username": "superreview",
+		"name": "Super* Review",
+		"urlType": "root",
+        "dbs": [
+            {
+                "type": "Earbuds",
+                "folder": "/earbuds/"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": true
+            }
+        ]
+	},
+    {
+		"username": "tanchjim",
+		"name": "Tanchjim",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "tdl",
+		"name": "TDL",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "tedthepraimortis",
+		"name": "Ted's Squig Hoard",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "tgx78",
+		"name": "tgx78",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "therollo9",
+		"name": "therollo9",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            },
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "timmyv",
+		"name": "TimTuned",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            }
+        ]
+	},
+	{
+		"username": "tonedeafmonk",
+		"name": "ToneDeafMonk",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "treblewellxtended",
+		"name": "Treble Well Xtended",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "sai",
+		"name": "Unheard Lab",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "Headphones",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "vortexreviews",
+		"name": "Vortex Reviews",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "vsg",
+		"name": "VSG",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/",
+                "deltaReady": "true"
+            },
+            {
+                "type": "Headphones",
+                "folder": "/headphones/"
+            }
+        ]
+	},
+	{
+		"username": "yanyin",
+		"name": "Yanyin",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "yoshiultra",
+		"name": "yoshi ultra",
+		"urlType": "subdomain",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	},
+	{
+		"username": "zerostresslevel",
+		"name": "zerostresslevel",
+		"urlType": "labFolder",
+        "dbs": [
+            {
+                "type": "IEMs",
+                "folder": "/"
+            }
+        ]
+	}
+]

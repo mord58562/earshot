@@ -2091,7 +2091,17 @@ private struct HeadphoneSearchSheet: View {
         }
         .frame(width: 540)
         .task {
-            if !didAutoRefresh, HeadphoneIndex.cacheIsStale() {
+            // Auto-refresh if the cache is stale OR if it has zero squig-
+            // direct entries (meaning the cache predates the squig.link
+            // integration). Without the second condition existing users
+            // with a fresh cache wouldn't see the new sources until the
+            // 7-day TTL expired.
+            let knownSquigIDs = Set(SquigFetcher.liveSources.map(\.id))
+            let cacheHasSquig = state.headphoneIndex.contains {
+                knownSquigIDs.contains($0.measurer)
+            }
+            if !didAutoRefresh,
+               HeadphoneIndex.cacheIsStale() || !cacheHasSquig {
                 didAutoRefresh = true
                 await state.refreshHeadphoneIndex()
             }

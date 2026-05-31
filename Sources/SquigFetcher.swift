@@ -47,38 +47,129 @@ enum SquigFetcher {
         let defaultTarget: String   // file name (without ".txt") of the default Target.txt
     }
 
-    static let liveSources: [Source] = [
-        Source(id: "hangout-5128",
-               label: "Crinacle 5128 (hangout.audio)",
-               dataBase: URL(string: "https://graph.hangout.audio/iem/5128/data/")!,
-               rig: "B&K 5128",
-               defaultTarget: "JM-1"),
-        Source(id: "hangout-711",
-               label: "Crinacle 711 (hangout.audio)",
-               dataBase: URL(string: "https://graph.hangout.audio/iem/711/data/")!,
-               rig: "IEC 60318-4 (711)",
-               defaultTarget: "IEF Neutral 2023"),
-        Source(id: "hangout-hp",
-               label: "Crinacle Headphones (hangout.audio)",
-               dataBase: URL(string: "https://graph.hangout.audio/headphones/data/")!,
-               rig: "GRAS 43AG-7",
-               defaultTarget: "Harman OE 2018"),
-        Source(id: "listener",
-               label: "Listener (KB006x)",
-               dataBase: URL(string: "https://listener.squig.link/data/")!,
-               rig: "KB006x",
-               defaultTarget: "Listener"),
-        Source(id: "vsg",
-               label: "VSG",
-               dataBase: URL(string: "https://vsg.squig.link/data/")!,
-               rig: "IEC 60318-4 (711)",
-               defaultTarget: "Harman 2019 IE"),
-        Source(id: "precog",
-               label: "Precogvision",
-               dataBase: URL(string: "https://precog.squig.link/data/")!,
-               rig: "IEC 60318-4 (711)",
-               defaultTarget: "Harman 2019 IE"),
+    /// Lazy-loaded from `squigsites.json` (the same directory squig.link
+    /// itself uses to populate its "more squiglinks" picker). All 118
+    /// databases get enumerated; per-site failures during refresh are
+    /// logged and skipped, not fatal. Bundled fallback so first-run
+    /// works offline.
+    static let liveSources: [Source] = loadSitesFromBundle()
+
+    private static func loadSitesFromBundle() -> [Source] {
+        guard let url = Bundle.main.url(forResource: "squigsites", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let sites = try? JSONDecoder().decode([SquigSiteEntry].self, from: data) else {
+            // Fallback to the half-dozen hand-curated sources that were
+            // shipped in 1.4.0 so the catalog isn't empty if the bundled
+            // JSON ever ends up missing.
+            return Source.handCuratedFallback
+        }
+        return sites.flatMap { $0.expandToSources() }
+    }
+
+    private struct SquigSiteEntry: Decodable {
+        let name: String
+        let username: String
+        let urlType: String?     // "subdomain", "root", "altDomain", "lab"
+        let altDomain: String?
+        let dbs: [DbEntry]?
+
+        struct DbEntry: Decodable {
+            let type: String     // "IEMs", "Headphones", "5128", "Earbuds"
+            let folder: String?  // "/", "/headphones/", "/iems/", etc.
+        }
+
+        /// Expand to one SquigFetcher.Source per (site, database). Most
+        /// sites have a single IEM database; multi-db sites (Hangout,
+        /// CammyFi, Listener, Filk, kr0mka, Hadoe, SilicaGel etc.)
+        /// produce 2-3 Sources each.
+        func expandToSources() -> [SquigFetcher.Source] {
+            let baseURL: String
+            switch urlType {
+            case "root":         baseURL = "https://squig.link"
+            case "altDomain":    baseURL = altDomain ?? "https://\(username).squig.link"
+            case "subdomain":    baseURL = "https://\(username).squig.link"
+            default:             baseURL = "https://squig.link/lab/\(username)"
+            }
+            return (dbs ?? []).compactMap { db in
+                let folder = db.folder ?? "/"
+                guard let url = URL(string: baseURL + folder + "data/") else { return nil }
+                let id = "\(username)\(folder.replacingOccurrences(of: "/", with: "-"))"
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+                return SquigFetcher.Source(
+                    id: id,
+                    label: dbLabel(name: name, type: db.type),
+                    dataBase: url,
+                    rig: rigForDbType(db.type, source: username),
+                    defaultTarget: defaultTargetForDbType(db.type, source: username))
+            }
+        }
+    }
+}
+
+extension SquigFetcher.Source {
+    static let handCuratedFallback: [SquigFetcher.Source] = [
+        .init(id: "hangout-5128",
+              label: "Crinacle 5128 (hangout.audio)",
+              dataBase: URL(string: "https://graph.hangout.audio/iem/5128/data/")!,
+              rig: "B&K 5128", defaultTarget: "JM-1"),
+        .init(id: "hangout-711",
+              label: "Crinacle 711 (hangout.audio)",
+              dataBase: URL(string: "https://graph.hangout.audio/iem/711/data/")!,
+              rig: "IEC 60318-4 (711)", defaultTarget: "IEF Neutral 2023"),
+        .init(id: "hangout-hp",
+              label: "Crinacle Headphones (hangout.audio)",
+              dataBase: URL(string: "https://graph.hangout.audio/headphones/data/")!,
+              rig: "GRAS 43AG-7", defaultTarget: "Harman OE 2018"),
+        .init(id: "hbb",
+              label: "HBB",
+              dataBase: URL(string: "https://hbb.squig.link/data/")!,
+              rig: "IEC 60318-4 (711)", defaultTarget: "Harman 2019 IE"),
     ]
+}
+
+/// Per-DB shape labels, rigs, and default targets. Heuristics tuned for
+/// the squig.link convention - IEMs are 711 by default unless the site
+/// is the explicit 5128 type; headphones default to GRAS-rig with a
+/// Harman 2018 OE target; earbuds get no target since none of the
+/// in-ear targets translate.
+private func dbLabel(name: String, type: String) -> String {
+    switch type {
+    case "5128":      return "\(name) (5128)"
+    case "Headphones": return "\(name) (headphones)"
+    case "Earbuds":   return "\(name) (earbuds)"
+    default:           return name
+    }
+}
+
+private func rigForDbType(_ type: String, source: String) -> String {
+    switch type {
+    case "5128":      return "B&K 5128"
+    case "Headphones":
+        // A handful of headphone squigs use HMS II.3 rather than GRAS.
+        if source.lowercased().contains("kr0mka") { return "GRAS 43AG" }
+        return "GRAS 43AG-7"
+    case "Earbuds":   return "IEC 60318-4 (711)"
+    default:           return "IEC 60318-4 (711)"
+    }
+}
+
+private func defaultTargetForDbType(_ type: String, source: String) -> String {
+    switch type {
+    case "5128":
+        // Crinacle's hangout primary is JM-1; Earphones Archive and
+        // other 5128 squigs ship IEF Neutral as default.
+        return source.lowercased().contains("graph") ? "JM-1" : "IEF Neutral 2023"
+    case "Headphones": return "Harman 2018 OE"
+    case "Earbuds":   return "Diffuse Field"   // earbuds don't have a Harman target
+    default:           return "Harman 2019 IE"
+    }
+}
+
+// The fetch / parse / fit methods originally lived inside the
+// SquigFetcher enum's body. Splitting them into an extension keeps
+// the directory-loading and helper-function group separate from the
+// catalog/PEQ machinery without reflowing 200+ lines of code.
+extension SquigFetcher {
 
     /// Fetch the phone_book.json for a source and flatten to one
     /// HeadphoneEntry per model. Squig phone_book entries are a mixed

@@ -21,6 +21,7 @@ fi
 cp Resources/AppIcon.icns "$BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cp Resources/presets.json   "$BUNDLE/Contents/Resources/presets.json"
 cp Resources/headphones.json "$BUNDLE/Contents/Resources/headphones.json" 2>/dev/null || true
+cp Resources/squigsites.json "$BUNDLE/Contents/Resources/squigsites.json" 2>/dev/null || true
 
 SOURCES=(
   Sources/Logging.swift
