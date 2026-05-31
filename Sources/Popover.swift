@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import UniformTypeIdentifiers
+import AppKit
 
 // MARK: - Root popover
 
@@ -86,8 +88,88 @@ struct PopoverRoot: View {
         } message: {
             Text(importErrorMessage ?? "")
         }
+        // Drag a ParametricEQ.txt onto any part of the popover to import.
+        // SwiftUI's URL-typed drop destination accepts file URLs from
+        // Finder; we filter to text-like content inside so dragging a
+        // random file gives a clean error rather than a parse crash.
+        .onDrop(of: [.fileURL, .plainText, .utf8PlainText, .text],
+                isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers: providers)
+            return true
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .background(Color.accentColor.opacity(0.06))
+                    .allowsHitTesting(false)
+                    .padding(2)
+            }
+        }
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+    }
+
+    @State private var isDropTargeted: Bool = false
+
+    /// Accept either file-URL providers (Finder drag) or raw text
+    /// providers (drag-selection from a browser, paste from a clipboard
+    /// manager). Apply the first one that parses; surface a single
+    /// error if none do.
+    private func handleDrop(providers: [NSItemProvider]) {
+        Task { @MainActor in
+            for provider in providers {
+                if provider.canLoadObject(ofClass: URL.self) {
+                    if await loadURL(from: provider) { return }
+                }
+                if let text = await loadString(from: provider) {
+                    let result = state.importPresetFromText(text, filename: "Dropped preset")
+                    if case .failure(let e) = result {
+                        importErrorMessage = e.errorDescription
+                    } else {
+                        return
+                    }
+                }
+            }
+            importErrorMessage = "Drop a ParametricEQ.txt file (AutoEQ / oratory1990 format)."
+        }
+    }
+
+    private func loadURL(from provider: NSItemProvider) async -> Bool {
+        // The temp URL passed to loadFileRepresentation is only valid
+        // inside the callback - read the file there. Capture the text
+        // (a Sendable String) and hop to main to call into state.
+        let result: (text: String, name: String)? = await withCheckedContinuation { cont in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { url, _ in
+                guard let url = url else { cont.resume(returning: nil); return }
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                    cont.resume(returning: nil); return
+                }
+                let name = url.deletingPathExtension().lastPathComponent
+                cont.resume(returning: (text, name))
+            }
+        }
+        guard let result = result else { return false }
+        let r = state.importPresetFromText(result.text, filename: result.name)
+        if case .failure(let e) = r {
+            importErrorMessage = e.errorDescription
+            return false
+        }
+        return true
+    }
+
+    private func loadString(from provider: NSItemProvider) async -> String? {
+        let types = [UTType.utf8PlainText.identifier, UTType.plainText.identifier, UTType.text.identifier]
+        for type in types where provider.hasItemConformingToTypeIdentifier(type) {
+            if let data = try? await provider.loadItem(forTypeIdentifier: type) as? Data,
+               let s = String(data: data, encoding: .utf8), !s.isEmpty {
+                return s
+            }
+            if let s = try? await provider.loadItem(forTypeIdentifier: type) as? String, !s.isEmpty {
+                return s
+            }
+        }
+        return nil
     }
 
     private func installKeyMonitor() {
@@ -603,10 +685,12 @@ private struct BandRow: View {
                        commit: { v in state.updateBand(id: band.id) {
                            $0.frequency = max(20, min(22000, v))
                        }},
-                       width: 80)
+                       width: 80,
+                       editable: true,
+                       parse: { parseFreq($0) })
 
             stepperBox(label: "dB", value: band.gain,
-                       format: { String(format: "%+0.1f", Double($0)) },
+                       format: { formatDB($0, decimals: 1, unit: false) },
                        step: { dir, _ in
                            band.gain + Float(dir) * 0.5
                        },
@@ -614,7 +698,9 @@ private struct BandRow: View {
                            $0.gain = max(-24, min(24, v))
                        }},
                        width: 68,
-                       enabled: band.type.usesGain)
+                       enabled: band.type.usesGain,
+                       editable: true,
+                       parse: { Float($0) })
 
             stepperBox(label: "Q", value: band.q,
                        format: { String(format: "%0.2f", Double($0)) },
@@ -643,19 +729,47 @@ private struct BandRow: View {
         return String(format: "%.0f", Double(f))
     }
 
+    /// Parse a Hz value the user might type. Accepts "1k", "1.5kHz", "440",
+    /// "440 hz" with any case. Returns nil if the input doesn't read as a
+    /// number; the caller leaves the old value in place when nil.
+    fileprivate func parseFreq(_ s: String) -> Float? {
+        let trimmed = s.trimmingCharacters(in: .whitespaces).lowercased()
+            .replacingOccurrences(of: "hz", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        if let kRange = trimmed.range(of: "k") {
+            let head = String(trimmed[..<kRange.lowerBound])
+            if let v = Float(head.trimmingCharacters(in: .whitespaces)) {
+                return v * 1000
+            }
+            return nil
+        }
+        return Float(trimmed)
+    }
+
     @ViewBuilder
     private func stepperBox(label: String,
                             value: Float,
-                            format: (Float) -> String,
+                            format: @escaping (Float) -> String,
                             step: @escaping (Int, Bool) -> Float,
                             commit: @escaping (Float) -> Void,
                             width: CGFloat,
-                            enabled: Bool = true) -> some View {
+                            enabled: Bool = true,
+                            editable: Bool = false,
+                            parse: ((String) -> Float?)? = nil) -> some View {
         HStack(spacing: 2) {
-            Text(format(value))
-                .monospacedDigit()
-                .font(.system(size: 11))
-                .frame(width: width - 26, alignment: .trailing)
+            if editable, let parse = parse {
+                EditableValueText(value: value,
+                                  format: format,
+                                  parse: parse,
+                                  commit: commit,
+                                  width: width - 26)
+                    .disabled(!enabled)
+            } else {
+                Text(format(value))
+                    .monospacedDigit()
+                    .font(.system(size: 11))
+                    .frame(width: width - 26, alignment: .trailing)
+            }
             VStack(spacing: 0) {
                 Button {
                     commit(step(1, NSEvent.modifierFlags.contains(.shift)))
@@ -678,6 +792,69 @@ private struct BandRow: View {
     }
 }
 
+/// Inline value readout that swaps to an editable text field on double-
+/// click. Enter commits, Esc reverts, focus-loss commits. Lives alongside
+/// the existing chevron buttons so the user can keep nudging with the
+/// arrows or type a precise value when they have one in mind.
+private struct EditableValueText: View {
+    let value: Float
+    let format: (Float) -> String
+    let parse: (String) -> Float?
+    let commit: (Float) -> Void
+    let width: CGFloat
+
+    @State private var isEditing = false
+    @State private var draft: String = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        ZStack {
+            if isEditing {
+                TextField("", text: $draft)
+                    .textFieldStyle(.plain)
+                    .monospacedDigit()
+                    .font(.system(size: 11))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: width)
+                    .focused($focused)
+                    .onSubmit { commitDraft() }
+                    .onExitCommand { cancel() }
+                    .onChange(of: focused) { newValue in
+                        if !newValue && isEditing { commitDraft() }
+                    }
+            } else {
+                Text(format(value))
+                    .monospacedDigit()
+                    .font(.system(size: 11))
+                    .frame(width: width, alignment: .trailing)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { beginEditing() }
+            }
+        }
+    }
+
+    private func beginEditing() {
+        // Strip the unit/sign chrome so the user can just type "5" or
+        // "-3.5" without having to delete a "+" or " dB" first.
+        draft = String(format: "%g", Double(value))
+        isEditing = true
+        DispatchQueue.main.async { focused = true }
+    }
+
+    private func commitDraft() {
+        if let v = parse(draft) {
+            commit(v)
+        }
+        isEditing = false
+        focused = false
+    }
+
+    private func cancel() {
+        isEditing = false
+        focused = false
+    }
+}
+
 // MARK: - Preamp + meters row
 
 private struct PreampStepper: View {
@@ -696,7 +873,7 @@ private struct PreampStepper: View {
                 state.setPreamp(min(12, state.workingPreamp + 0.1))
             }
 
-            Text(String(format: "%+0.1f dB", Double(state.workingPreamp)))
+            Text(formatDB(state.workingPreamp))
                 .monospacedDigit()
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
@@ -891,8 +1068,8 @@ private struct PresetList: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(state.presets) { p in
-                    PresetRow(preset: p, state: state, renameTarget: $renameTarget)
+                ForEach(Array(state.presets.enumerated()), id: \.element.id) { idx, p in
+                    PresetRow(preset: p, index: idx, state: state, renameTarget: $renameTarget)
                     if p.id != state.presets.last?.id {
                         Divider().opacity(0.12)
                     }
@@ -911,12 +1088,21 @@ private struct PresetList: View {
 
 private struct PresetRow: View {
     let preset: EQPreset
+    let index: Int
     @ObservedObject var state: AppState
     @Binding var renameTarget: EQPreset?
+    @State private var isDropTarget: Bool = false
 
     var body: some View {
         let isLoaded = state.loadedPresetID == preset.id
         HStack(spacing: 10) {
+            // Drag-handle hint: a quiet two-line grip glyph on the left
+            // edge so the row reads as draggable without forcing the
+            // user to discover that the whole row is grabbable.
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .frame(width: 12)
             Text(preset.name)
                 .font(.system(size: 12, weight: isLoaded ? .semibold : .regular))
             Spacer()
@@ -940,17 +1126,50 @@ private struct PresetRow: View {
         // and OUTPUT block above. The loaded-state indicator is an overlay
         // pinned to the popover's left edge so it still reads as a flush
         // accent strip without shifting the text.
-        .padding(.leading, 16)
+        .padding(.leading, 8)
         .padding(.trailing, 12)
         .padding(.vertical, 7)
         .contentShape(Rectangle())
-        .background(isLoaded ? Color.accentColor.opacity(0.06) : Color.clear)
+        .background(
+            isDropTarget
+                ? Color.accentColor.opacity(0.14)
+                : (isLoaded ? Color.accentColor.opacity(0.06) : Color.clear)
+        )
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(isLoaded ? Color.accentColor : Color.clear)
                 .frame(width: 2)
         }
+        .overlay(alignment: .top) {
+            // Insert-line: shown at the top of the row while a drag is
+            // hovering. Mirrors the macOS Finder reorder affordance so
+            // there's no question where the dropped row will land.
+            if isDropTarget {
+                Rectangle().fill(Color.accentColor).frame(height: 2)
+            }
+        }
         .onTapGesture { state.loadPreset(preset.id) }
+        .draggable(preset.id.uuidString) {
+            // Drag preview - matches the row chrome at a smaller scale
+            // so the user gets confirmation the row is the thing they
+            // grabbed, not the whole list.
+            Text(preset.name)
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(.thickMaterial)
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let droppedID = items.first,
+                  let from = state.presets.firstIndex(where: { $0.id.uuidString == droppedID })
+            else { return false }
+            // Drop ON row N → insert above row N. The +1/-0 math for
+            // "moving downward" is handled inside Array.move(fromOffsets:),
+            // so we pass the visible target index directly.
+            state.movePreset(from: from, to: index)
+            return true
+        } isTargeted: { hovering in
+            isDropTarget = hovering
+        }
     }
 }
 
@@ -1315,7 +1534,7 @@ private struct EQCurveView: View {
         let parts: [String] = {
             var out: [String] = [Self.freqLabel(band.frequency)]
             if band.type.usesGain {
-                out.append(String(format: "%+.1f dB", Double(band.gain)))
+                out.append(formatDB(band.gain))
             }
             if band.type.usesQ {
                 out.append(String(format: "Q %.2f", Double(band.q)))
@@ -1659,7 +1878,7 @@ private struct BandInspectorSheet: View {
         }
         draftType = b.type
         freqText  = String(format: "%.1f", Double(b.frequency))
-        gainText  = String(format: "%+.1f", Double(b.gain))
+        gainText  = formatDB(b.gain, unit: false)
         qText     = String(format: "%.2f", Double(b.q))
         bypass    = b.bypass
     }
@@ -1888,7 +2107,7 @@ private struct UserPresetSearchRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(preset.name).font(.system(size: 12, weight: .medium))
-                Text("\(preset.bands.count) bands · preamp \(String(format: "%+0.1f", Double(preset.preampDB))) dB")
+                Text("\(preset.bands.count) bands · preamp \(formatDB(preset.preampDB))")
                     .font(.system(size: 10))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

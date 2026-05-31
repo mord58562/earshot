@@ -123,6 +123,12 @@ enum AutoEQFormat {
 
     static func encode(_ preset: EQPreset) -> String {
         var out = ""
+        // The on-disk ParametricEQ.txt format follows AutoEQ's exporter:
+        // a signed decimal with no leading `+`, matching what every other
+        // app that consumes this format (EqualizerAPO, Wavelet, Poweramp)
+        // expects. This intentionally diverges from Earshot's UI
+        // convention (formatDB with explicit `+/-`) because the format is
+        // an interchange contract, not display copy.
         out += String(format: "Preamp: %0.1f dB\n", Double(preset.preampDB))
         for (i, b) in preset.bands.enumerated() {
             let freqStr: String

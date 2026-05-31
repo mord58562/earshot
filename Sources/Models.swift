@@ -206,3 +206,21 @@ func bandwidthOctaves(forQ q: Float) -> Float {
     let v = asinhf(0.5 / q) * (2.0 / Float(log(2.0)))
     return min(max(v, 0.05), 5.0)
 }
+
+/// One source of truth for displaying dB values in Earshot. Industry
+/// convention used by FabFilter Pro-Q, Logic Channel EQ, Pro Tools EQ7:
+/// explicit `+` on positive, `-` on negative, no sign on exact zero.
+/// `decimals` defaults to 1; pass 2 where finer steps are visible.
+func formatDB(_ value: Float, decimals: Int = 1, unit: Bool = true) -> String {
+    let suffix = unit ? " dB" : ""
+    let absVal = abs(value)
+    // Round to the printed precision before deciding "is this zero?" so a
+    // tiny negative residual (e.g. -0.001) doesn't render as "-0.0".
+    let scale = powf(10, Float(decimals))
+    let rounded = (absVal * scale).rounded() / scale
+    if rounded == 0 {
+        return String(format: "%.\(decimals)f%@", 0.0, suffix)
+    }
+    let sign = value < 0 ? "-" : "+"
+    return String(format: "%@%.\(decimals)f%@", sign, Double(rounded), suffix)
+}

@@ -499,7 +499,7 @@ final class AppState: ObservableObject {
             let defaultOut = DeviceCatalog.currentDefaultOutput()
             let defaultName = DeviceCatalog.all().first { $0.id == defaultOut }?.name ?? "?"
             let ringFill = engine.ringBufferFillFrames
-            Log.write("heartbeat: running=\(engine.isRunning) inPeak=\(String(format: "%.3f", engine.lastInputPeak)) preamp=\(String(format: "%+0.2f", workingPreamp)) sysDefault=\(defaultName) uptime=\(Int(runtime))s ringFrames=\(ringFill) inputRenderAge=\(String(format: "%.2f", inputRenderAge))s")
+            Log.write("heartbeat: running=\(engine.isRunning) inPeak=\(String(format: "%.3f", engine.lastInputPeak)) preamp=\(formatDB(workingPreamp, decimals: 2)) sysDefault=\(defaultName) uptime=\(Int(runtime))s ringFrames=\(ringFill) inputRenderAge=\(String(format: "%.2f", inputRenderAge))s")
         }
 
         // Failure mode 1: AVAudioEngine.isRunning has gone false. Wait
@@ -745,22 +745,36 @@ final class AppState: ObservableObject {
 
     func setOutputDevice(uid: String) {
         guard outputDeviceUID != uid else { return }
+        // Gate rapid clicks at the source. Without this, two Picker
+        // selections in quick succession queue two startInternal calls
+        // on the routing queue; the second one starts tearing down the
+        // engine the first one is mid-way through configuring. macOS
+        // surfaces that as either a CoreAudio IPC stall (silent freeze)
+        // or a use-after-free in the AVAudioSourceNode render block.
+        if isApplyingRouting {
+            Log.write("setOutputDevice rejected: routing already in flight")
+            return
+        }
         let from = outputDeviceUID ?? "nil"
         Log.write("setOutputDevice(\(from) -> \(uid)) eqEnabled=\(eqEnabled)")
         outputDeviceUID = uid
         if eqEnabled {
-            restartRouting()
+            startRouting()
         }
         persist()
     }
 
     func setInputDevice(uid: String) {
         guard inputDeviceUID != uid else { return }
+        if isApplyingRouting {
+            Log.write("setInputDevice rejected: routing already in flight")
+            return
+        }
         let from = inputDeviceUID ?? "nil"
         Log.write("setInputDevice(\(from) -> \(uid)) eqEnabled=\(eqEnabled)")
         inputDeviceUID = uid
         if eqEnabled {
-            restartRouting()
+            startRouting()
         }
         persist()
     }
@@ -1046,6 +1060,51 @@ final class AppState: ObservableObject {
         if loadedPresetID == id { loadedPresetID = nil }
         Storage.savePresets(presets)
         persist()
+    }
+
+    /// Reorder saved presets. The on-disk order IS the user-visible order;
+    /// the array index in `presets` doubles as the display rank.
+    func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
+        presets.move(fromOffsets: source, toOffset: destination)
+        Storage.savePresets(presets)
+        persist()
+    }
+
+    /// Move a single preset between two visible indices. Wraps `movePresets`
+    /// for the drag-and-drop case where the caller has a `from`/`to` pair
+    /// instead of an `IndexSet`.
+    func movePreset(from: Int, to: Int) {
+        guard presets.indices.contains(from), from != to else { return }
+        let clampedTo = max(0, min(presets.count, to))
+        movePresets(fromOffsets: IndexSet(integer: from), toOffset: clampedTo)
+    }
+
+    // MARK: - Drag-drop preset import
+
+    /// Common entry point for any "I have a ParametricEQ.txt text blob"
+    /// path - drag-drop onto the popover, paste into the import sheet,
+    /// fetch from the library. Returns the parsed preset on success so
+    /// callers can show "Imported HD 600 (Harman 2018 OE)" toasts.
+    @discardableResult
+    func importPresetFromText(_ text: String, filename: String) -> Result<EQPreset, AutoEQFormat.ParseError> {
+        let defaultName = filename
+            .replacingOccurrences(of: " ParametricEQ", with: "")
+            .replacingOccurrences(of: ".txt", with: "")
+        let r = importAutoEQ(text: text, defaultName: defaultName)
+        if case .success(let p) = r {
+            // Adopt the imported preset as the working EQ so the drag
+            // immediately changes what the user is hearing. Without this
+            // the only feedback is the new row in the preset list, which
+            // is easy to miss in a long catalog.
+            recordUndoSnapshot()
+            workingPreamp = p.preampDB
+            workingBands = p.bands
+            loadedPresetID = p.id
+            reapplyEQ()
+            persist()
+            Log.write("imported preset from drop: \(p.name) (\(p.bands.count) bands)")
+        }
+        return r
     }
 
     // MARK: - Engine control
