@@ -88,7 +88,17 @@ struct HeadphoneEntry: Codable, Identifiable, Hashable {
               comps.count > idx + 3 else { return nil }
         let setRaw = comps[idx + 2]
             .removingPercentEncoding ?? comps[idx + 2]
-        return (set: setRaw, rig: rigFromSet(setRaw), target: targetFromSet(setRaw))
+        let measurerRaw = (comps[idx + 1].removingPercentEncoding ?? comps[idx + 1])
+        return (set: setRaw,
+                rig: rigFromSet(setRaw),
+                target: targetFromSet(setRaw, measurer: measurerRaw))
+    }
+
+    /// Public re-exports for callers (the refresh loop) that have a set
+    /// name + measurer in hand but no full URL to parse.
+    static func rigFromSetPublic(_ set: String) -> String? { rigFromSet(set) }
+    static func targetFromSetPublic(_ set: String, measurer: String) -> String? {
+        targetFromSet(set, measurer: measurer)
     }
 
     /// Heuristic. AutoEQ folder names are not formal, but the conventions
@@ -109,33 +119,27 @@ struct HeadphoneEntry: Codable, Identifiable, Hashable {
         return nil
     }
 
-    private static func targetFromSet(_ set: String) -> String? {
-        let lower = set.lowercased()
-        // Be specific before generic.
-        if lower.contains("harman_in-ear_2019_v2") || lower.contains("harman 2019 v2") {
-            return "Harman 2019 IE v2"
+    /// Infer the target curve AutoEQ tuned this PEQ against. AutoEQ
+    /// folder names encode rig, not target; the target is convention
+    /// per (measurer, rig). Mirror of `target_from(measurer, set_name)`
+    /// in Tools/build_headphones_json.py so the runtime backfill and
+    /// the bundled snapshot agree.
+    private static func targetFromSet(_ set: String, measurer: String) -> String? {
+        let s = set.lowercased()
+        let m = measurer.lowercased()
+        if s.contains("5128") {
+            if s.contains("in-ear") || s.contains("iem") {
+                return m.contains("crinacle") ? "JM-1" : "IEF Neutral"
+            }
+            if s.contains("over-ear") { return "Harman 2018 OE" }
+            if s.contains("earbud") { return nil }
         }
-        if lower.contains("harman_in-ear_2019") || lower.contains("harman 2019") {
-            return "Harman 2019 IE"
-        }
-        if lower.contains("harman_in-ear_2017") || lower.contains("harman 2017 ie") {
-            return "Harman 2017 IE"
-        }
-        if lower.contains("harman_over-ear_2018") || lower.contains("harman 2018") {
+        if s.contains("ief") { return "IEF Neutral" }
+        if s.contains("jm-1") || s.contains("jm1") { return "JM-1" }
+        if s.contains("711") || s.contains("in-ear") { return "Harman 2019 IE" }
+        if s.contains("over-ear") || s.contains("gras")
+            || s.contains("kemar") || s.contains("hms") || s.contains("ears") {
             return "Harman 2018 OE"
-        }
-        if lower.contains("harman_over-ear_2015") || lower.contains("harman 2015") {
-            return "Harman 2015 OE"
-        }
-        if lower.contains("autoeq_in-ear") { return "AutoEQ IE" }
-        if lower.contains("autoeq_over-ear") { return "AutoEQ OE" }
-        if lower.contains("ief") { return "IEF Neutral" }
-        if lower.contains("jm-1") || lower.contains("jm1") { return "JM-1" }
-        if lower.contains("diffuse field") || lower.contains("diffuse_field") {
-            return "Diffuse Field"
-        }
-        if lower.contains("free field") || lower.contains("free_field") {
-            return "Free Field"
         }
         return nil
     }
@@ -235,8 +239,10 @@ enum HeadphoneIndex {
                             measurer: measurer,
                             rawTxtURL: raw,
                             set: derived?.set ?? set.name,
-                            rig: derived?.rig,
-                            target: derived?.target))
+                            rig: derived?.rig
+                                ?? HeadphoneEntry.rigFromSetPublic(set.name),
+                            target: derived?.target
+                                ?? HeadphoneEntry.targetFromSetPublic(set.name, measurer: measurer)))
                     }
                 } catch {
                     Log.write("AutoEQ listing for \(measurer)/\(set.name) failed: \(error.localizedDescription)")

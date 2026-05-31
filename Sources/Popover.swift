@@ -1069,25 +1069,70 @@ private struct ToolbarButton: View {
 private struct PresetList: View {
     @ObservedObject var state: AppState
     @Binding var renameTarget: EQPreset?
+    /// Reorder is a mode, not a permanent affordance - the grip handle,
+    /// drag, and tap-to-suppress only appear while this is true. Default
+    /// is off so the day-to-day "click a row to load" interaction stays
+    /// uncluttered. Hoisted to PopoverRoot? No - the mode is purely
+    /// scoped to this list, and persisting it across closes would be
+    /// confusing (you'd open the popover and find rows non-clickable
+    /// because last time you were reordering).
+    @State private var reordering: Bool = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(state.presets.enumerated()), id: \.element.id) { idx, p in
-                    PresetRow(preset: p, index: idx, state: state, renameTarget: $renameTarget)
-                    if p.id != state.presets.last?.id {
-                        Divider().opacity(0.12)
+        VStack(spacing: 0) {
+            if state.presets.count >= 2 {
+                reorderHeader
+            }
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(state.presets.enumerated()), id: \.element.id) { idx, p in
+                        PresetRow(preset: p, index: idx, state: state,
+                                  renameTarget: $renameTarget,
+                                  reordering: reordering)
+                        if p.id != state.presets.last?.id {
+                            Divider().opacity(0.12)
+                        }
+                    }
+                    if state.presets.isEmpty {
+                        Text("No saved presets yet.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 14)
                     }
                 }
-                if state.presets.isEmpty {
-                    Text("No saved presets yet.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 14)
-                }
             }
+            .frame(maxHeight: 180)
         }
-        .frame(maxHeight: 180)
+        // Auto-exit reorder mode if the user runs out of rows to reorder
+        // (deleted them all down to one). Otherwise the mode would stick
+        // around with nothing to do.
+        .onChange(of: state.presets.count) { count in
+            if reordering && count < 2 { reordering = false }
+        }
+    }
+
+    @ViewBuilder
+    private var reorderHeader: some View {
+        HStack(spacing: 6) {
+            if reordering {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("Drag rows to reorder")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(reordering ? "Done" : "Reorder") {
+                reordering.toggle()
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderless)
+            .foregroundStyle(reordering ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(reordering ? Color.accentColor.opacity(0.05) : Color.clear)
     }
 }
 
@@ -1096,18 +1141,21 @@ private struct PresetRow: View {
     let index: Int
     @ObservedObject var state: AppState
     @Binding var renameTarget: EQPreset?
+    let reordering: Bool
     @State private var isDropTarget: Bool = false
 
     var body: some View {
         let isLoaded = state.loadedPresetID == preset.id
         HStack(spacing: 10) {
-            // Drag-handle hint: a quiet two-line grip glyph on the left
-            // edge so the row reads as draggable without forcing the
-            // user to discover that the whole row is grabbable.
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .frame(width: 12)
+            // Grip handle is mode-gated. Day-to-day the row is a clean
+            // "click to load" target; entering reorder mode reveals the
+            // grip and turns on drag/drop.
+            if reordering {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14)
+            }
             Text(preset.name)
                 .font(.system(size: 12, weight: isLoaded ? .semibold : .regular))
             Spacer()
@@ -1126,54 +1174,79 @@ private struct PresetRow: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .frame(width: 22)
+            .disabled(reordering)
+            .opacity(reordering ? 0.35 : 1)
         }
-        // Content text aligns at x=16 to match the EQ ON / EQ OFF headings
-        // and OUTPUT block above. The loaded-state indicator is an overlay
-        // pinned to the popover's left edge so it still reads as a flush
-        // accent strip without shifting the text.
-        .padding(.leading, 8)
+        .padding(.leading, reordering ? 8 : 16)
         .padding(.trailing, 12)
         .padding(.vertical, 7)
         .contentShape(Rectangle())
         .background(
             isDropTarget
                 ? Color.accentColor.opacity(0.14)
-                : (isLoaded ? Color.accentColor.opacity(0.06) : Color.clear)
+                : (isLoaded && !reordering ? Color.accentColor.opacity(0.06) : Color.clear)
         )
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(isLoaded ? Color.accentColor : Color.clear)
+                .fill(isLoaded && !reordering ? Color.accentColor : Color.clear)
                 .frame(width: 2)
         }
         .overlay(alignment: .top) {
-            // Insert-line: shown at the top of the row while a drag is
-            // hovering. Mirrors the macOS Finder reorder affordance so
-            // there's no question where the dropped row will land.
             if isDropTarget {
                 Rectangle().fill(Color.accentColor).frame(height: 2)
             }
         }
-        .onTapGesture { state.loadPreset(preset.id) }
-        .draggable(preset.id.uuidString) {
-            // Drag preview - matches the row chrome at a smaller scale
-            // so the user gets confirmation the row is the thing they
-            // grabbed, not the whole list.
-            Text(preset.name)
-                .font(.system(size: 11, weight: .medium))
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(.thickMaterial)
+        // Tap-to-load is the default interaction; in reorder mode it
+        // would compete with the drag gesture and make the rows feel
+        // ambiguous, so we suppress it entirely.
+        .onTapGesture {
+            if !reordering { state.loadPreset(preset.id) }
         }
-        .dropDestination(for: String.self) { items, _ in
-            guard let droppedID = items.first,
-                  let from = state.presets.firstIndex(where: { $0.id.uuidString == droppedID })
-            else { return false }
-            // Drop ON row N → insert above row N. The +1/-0 math for
-            // "moving downward" is handled inside Array.move(fromOffsets:),
-            // so we pass the visible target index directly.
-            state.movePreset(from: from, to: index)
-            return true
-        } isTargeted: { hovering in
-            isDropTarget = hovering
+        // Conditional drag/drop. Outside reorder mode the row is just
+        // a clickable cell; no drag gesture, no drop destination - so
+        // there's no risk of accidentally re-ranking presets by
+        // grabbing a row to scroll.
+        .modifier(ReorderModifier(
+            enabled: reordering,
+            preset: preset,
+            onDrop: { droppedID in
+                guard let from = state.presets.firstIndex(where: { $0.id.uuidString == droppedID })
+                else { return false }
+                state.movePreset(from: from, to: index)
+                return true
+            },
+            isDropTarget: $isDropTarget))
+    }
+}
+
+/// Mode-gated wrapper for the `.draggable` + `.dropDestination` pair.
+/// Applied conditionally so the row gets normal NSView hit-testing
+/// behaviour when reorder mode is off - SwiftUI's draggable installs
+/// a drag-tracking layer that subtly changes how the row reads under
+/// the cursor even when no drag is in progress.
+private struct ReorderModifier: ViewModifier {
+    let enabled: Bool
+    let preset: EQPreset
+    let onDrop: (String) -> Bool
+    @Binding var isDropTarget: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .draggable(preset.id.uuidString) {
+                    Text(preset.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.thickMaterial)
+                }
+                .dropDestination(for: String.self) { items, _ in
+                    guard let id = items.first else { return false }
+                    return onDrop(id)
+                } isTargeted: { hovering in
+                    isDropTarget = hovering
+                }
+        } else {
+            content
         }
     }
 }
