@@ -873,11 +873,16 @@ private struct PreampStepper: View {
                 state.setPreamp(min(12, state.workingPreamp + 0.1))
             }
 
-            Text(formatDB(state.workingPreamp))
-                .monospacedDigit()
-                .font(.system(size: 11))
+            EditableValueText(
+                value: state.workingPreamp,
+                format: { formatDB($0) },
+                parse: { Float($0) },
+                commit: { v in
+                    state.recordUndoSnapshot()
+                    state.setPreamp(max(-24, min(12, v)))
+                },
+                width: 56)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 1)
 
             chevron("chevron.down") {
