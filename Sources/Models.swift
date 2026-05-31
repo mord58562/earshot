@@ -36,7 +36,7 @@ enum EQFilter: String, Codable, CaseIterable, Identifiable {
 
     /// Whether the filter takes a Q / bandwidth parameter. Pass-style filters
     /// (lowPass / highPass / bandPass / bandStop without "resonant") ignore
-    /// gain too — but AVAudioUnitEQ won't reject the property, it just no-ops.
+    /// gain too - but AVAudioUnitEQ won't reject the property, it just no-ops.
     var usesQ: Bool {
         switch self {
         case .parametric, .resonantLowPass, .resonantHighPass,

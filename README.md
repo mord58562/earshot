@@ -16,6 +16,44 @@ and every sound your Mac plays runs through the EQ on its way out.
 | ![Auto preamp tracking](docs/screenshots/04-preamp-meter-active.png) | ![Speaker output](docs/screenshots/05-speaker-output.png) |
 | Auto-preamp tracking live levels. | Routing to MacBook speakers instead of headphones. |
 
+## What's new in 1.4.0
+
+- **Squig.link integration.** The preset library now spans 23 AutoEQ
+  measurers (oratory1990 + Crinacle + Super* Review + Innerfidelity +
+  Rtings + Kuulokenurkka + DHRME + HypetheSonics + Jaytiss + RikudouGoku
+  + kr0mka + Bakkwatan + Filk + Harpo + ToneDeafMonk + Headphone.com
+  Legacy + Hi End Portable + Ted's Squig Hoard + Auriculares Argentina
+  + Regan Cipher + freeryder05 + Fahryst + Kazi) AND six live
+  squig.link databases that AutoEQ doesn't mirror: Crinacle's current
+  primary on hangout.audio (5128, 711, GRAS over-ear), Listener
+  (KB006x), VSG, and Precogvision. Squig-direct entries are fit to PEQ
+  on device using a Swift port of squig's own equalizer.js algorithm
+  so the result matches what you'd get from the source site's "Get
+  filters" button.
+- **Drag-and-drop preset import.** Drag any ParametricEQ.txt file from
+  Finder onto the Earshot popover and it loads as the working EQ.
+- **Target-curve filter + qualifier line.** Search results now show
+  "measurer · rig · target" so you can tell a 711 PEQ from a 5128 PEQ
+  before importing (they're not interchangeable above 6 kHz). Imported
+  presets get the target curve baked into their name, e.g.
+  "Sennheiser HD 600 (Harman 2018 OE)". A pill strip above the search
+  field filters the catalog by target so the Harman set or the JM-1
+  set is one click away.
+- **Double-click to type values.** Any band's dB or Hz cell becomes an
+  editable text field on double-click. Enter commits, Esc reverts.
+  The existing chevron nudges still work for ±0.5 dB tweaks.
+- **Reorder saved presets.** Drag a preset row by its grip handle to
+  reorder. A live insert-line shows where the dropped row will land.
+- **Unified dB sign convention.** Every dB readout (band gain, preamp,
+  preset subtitle, hover tooltip) follows the FabFilter / Logic / Pro
+  Tools convention: explicit + on positive, - on negative, no sign on
+  exact zero. The ParametricEQ.txt exporter intentionally keeps the
+  AutoEQ interchange convention (no leading +) so importers stay happy.
+- **Output-device crash hardening.** Rapid output-picker selections
+  used to queue overlapping CoreAudio teardowns and could wedge the
+  engine. setOutputDevice / setInputDevice now gate on the routing
+  lock and drive the engine through a single atomic re-routing path.
+
 ## What's new in 1.3.0
 
 - **Any 2-channel loopback driver works.** Earshot used to require
@@ -76,10 +114,16 @@ and every sound your Mac plays runs through the EQ on its way out.
   [`ParametricEQ.txt`](https://github.com/jaakkopasanen/AutoEq),
   the same format AutoEQ, EqualizerAPO, Wavelet, and Poweramp Equalizer
   use, so presets carry across without a converter.
-- **Find your headphone** - search the bundled AutoEQ catalog (~2000
-  entries across oratory1990 + Crinacle measurements; on-demand refresh
-  from GitHub), click a model, and Earshot downloads its
-  ParametricEQ.txt and adds it as a preset.
+- **Find your headphone** - search the bundled AutoEQ catalog plus the
+  live squig.link databases (oratory1990, Crinacle on both AutoEQ and
+  hangout.audio, Super* Review, Innerfidelity, Rtings, Kuulokenurkka,
+  DHRME, HypetheSonics, Jaytiss, RikudouGoku, kr0mka, Bakkwatan, Filk,
+  Harpo, ToneDeafMonk, Headphone.com Legacy, Listener, VSG,
+  Precogvision and others). Pick a model + target curve, and Earshot
+  either downloads the published ParametricEQ.txt or fits one on
+  device from the raw frequency-response data.
+- **Drag-and-drop import** - drag any ParametricEQ.txt onto the popover
+  and it loads immediately as the working EQ.
 - **Tahoe-styled UI** - frosted-glass popover, continuous-corner card
   surfaces, custom logo and app icon generated programmatically at build.
 
@@ -88,12 +132,12 @@ and every sound your Mac plays runs through the EQ on its way out.
 - macOS 13.0 (Ventura) or later
 - Apple Silicon (arm64)
 - A 2-channel virtual loopback driver. Any of:
-  - [BlackHole 2ch](https://existential.audio/blackhole/) (free,
+ - [BlackHole 2ch](https://existential.audio/blackhole/) (free,
     MIT-licensed) - recommended.
-  - [VB-Cable](https://vb-audio.com/Cable/) (free, donationware).
-  - [Soundflower (2ch)](https://github.com/mattingalls/Soundflower)
+ - [VB-Cable](https://vb-audio.com/Cable/) (free, donationware).
+ - [Soundflower (2ch)](https://github.com/mattingalls/Soundflower)
     (MIT, unmaintained).
-  - [Loopback](https://rogueamoeba.com/loopback/) (Rogue Amoeba, paid).
+ - [Loopback](https://rogueamoeba.com/loopback/) (Rogue Amoeba, paid).
 
   Earshot picks the first one it finds. If you don't have any
   installed, the onboarding panel walks you through BlackHole 2ch.
@@ -102,7 +146,7 @@ and every sound your Mac plays runs through the EQ on its way out.
 
 Two paths, pick whichever you prefer.
 
-### Option A — Prebuilt download (no Terminal)
+### Option A - Prebuilt download (no Terminal)
 
 1. **Install a 2-channel loopback driver first.** Earshot won't
    capture audio without one. The recommended free option is BlackHole
@@ -114,20 +158,20 @@ Two paths, pick whichever you prefer.
 2. **Download `Earshot.app.zip`** from the [latest release](https://github.com/mord58562/earshot/releases/latest).
 3. **Unzip** it (Finder does this on double-click) and drag
    `Earshot.app` into `/Applications/`.
-4. **First launch — Gatekeeper.** This build is ad-hoc signed (no Apple
-   Developer ID — notarisation costs $99/year and this is a hobby
+4. **First launch - Gatekeeper.** This build is ad-hoc signed (no Apple
+   Developer ID - notarisation costs $99/year and this is a hobby
    project), so the first time you open it macOS will refuse with one
    of:
-   - "Earshot can't be opened because Apple cannot check it for
+ - "Earshot can't be opened because Apple cannot check it for
      malicious software."
-   - "macOS cannot verify that this app is free from malware."
+ - "macOS cannot verify that this app is free from malware."
 
    Two equivalent ways past it, one-time per binary:
 
-   - **Right-click → Open.** Right-click (Control-click) `Earshot.app`
+ - **Right-click → Open.** Right-click (Control-click) `Earshot.app`
      in `/Applications`, pick **Open**, then click **Open** in the
      dialog. macOS remembers the approval; future launches are silent.
-   - **System Settings.** If macOS won't show an Open button at all
+ - **System Settings.** If macOS won't show an Open button at all
      (newer macOS releases hide it on the first attempt), go to
      **System Settings → Privacy & Security**, scroll down to a row
      reading something like *"Earshot was blocked from use because it
@@ -140,7 +184,7 @@ Two paths, pick whichever you prefer.
 After first launch the menubar glyph appears and Earshot stays running
 until you quit it via Cmd-Q.
 
-### Option B — Build from source (one shell command)
+### Option B - Build from source (one shell command)
 
 ```sh
 git clone https://github.com/mord58562/earshot.git
@@ -152,7 +196,7 @@ cd earshot
 missing, or prints the manual download link if Homebrew isn't on the
 machine), runs `build.sh`, copies `Earshot.app` into `/Applications/`,
 and launches it. The same Gatekeeper override may still apply on first
-launch — see the right-click / System Settings instructions above.
+launch - see the right-click / System Settings instructions above.
 
 ### Launch at login
 
@@ -166,9 +210,9 @@ launch via `SMAppService`, so this is usually already done for you.
 2. Click the glyph; pick your **Output** device (where you want the EQ'd
    audio to play - your DAC, headphone jack, etc).
 3. Toggle the **EQ on/off** switch.
-   - **EQ on**: Earshot sets the system default output to BlackHole 2ch,
+ - **EQ on**: Earshot sets the system default output to BlackHole 2ch,
      captures from BlackHole, EQs it, and routes to the chosen output.
-   - **EQ off**: Earshot stops the engine entirely. macOS sound settings
+ - **EQ off**: Earshot stops the engine entirely. macOS sound settings
      are left alone, audio plays normally.
 4. Edit bands, save presets, or import oratory1990 measurements via
    **Find a preset**.
@@ -210,7 +254,7 @@ pactl):
 earshot-linux doctor
 ```
 
-**Apply a preset** — either a file you already have, or one looked up
+**Apply a preset** - either a file you already have, or one looked up
 by name from the bundled AutoEQ catalog:
 
 ```sh
@@ -234,7 +278,7 @@ rm ~/.local/bin/earshot-linux ~/.local/share/earshot/headphones.json
 
 If you'd rather have a graphical equaliser, install
 [EasyEffects](https://github.com/wwmm/easyeffects) and import the same
-`ParametricEQ.txt` manually — the file format is portable. Full Linux
+`ParametricEQ.txt` manually - the file format is portable. Full Linux
 CLI reference: [`linux/README.md`](linux/README.md).
 
 ## File formats
@@ -271,9 +315,9 @@ MIT - see [LICENSE](LICENSE).
 ## Attribution
 
 - **BlackHole 2ch** by Existential Audio (https://existential.audio/blackhole/)
-  - Required runtime dependency. Not bundled. Users install separately. MIT-licensed.
+ - Required runtime dependency. Not bundled. Users install separately. MIT-licensed.
 - **AutoEQ** by Jaakko Pasanen (https://github.com/jaakkopasanen/AutoEQ)
-  - The "Find a preset" feature browses AutoEQ's published `ParametricEQ.txt`
+ - The "Find a preset" feature browses AutoEQ's published `ParametricEQ.txt`
     files on demand. Earshot bundles a small index of URLs; the underlying
     measurement data is not included in this repository. AutoEQ is
     MIT-licensed.
@@ -283,7 +327,7 @@ MIT - see [LICENSE](LICENSE).
   through AutoEQ's mirror. Originals at https://crinacle.com/. Used as
   reference points; Earshot bundles only URLs to the measurement files.
 - **TPCircularBuffer** by Michael Tyson / A Tasty Pixel
-  (https://github.com/michaeltyson/TPCircularBuffer) — the lock-free SPSC
+  (https://github.com/michaeltyson/TPCircularBuffer) - the lock-free SPSC
   ring buffer that hands audio frames from the input AUHAL to the output
   engine. Source vendored under `Sources/Vendor/`. zlib-style license
   (notices retained in the source files).

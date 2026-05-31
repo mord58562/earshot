@@ -14,7 +14,7 @@ import Foundation
 ///
 /// Filter codes: PK (peak / parametric), LSC (low shelf), HSC (high shelf),
 /// LS (low shelf alias), HS (high shelf alias), LP (low pass), HP (high pass),
-/// BP (band pass), NO (notch / band stop), AP (all pass — not supported).
+/// BP (band pass), NO (notch / band stop), AP (all pass - not supported).
 enum AutoEQFormat {
 
     enum ParseError: Error, LocalizedError {
@@ -49,7 +49,7 @@ enum AutoEQFormat {
                 continue
             }
             if line.lowercased().hasPrefix("filter") {
-                // It's labelled as a filter but didn't parse — report it.
+                // It's labelled as a filter but didn't parse - report it.
                 return .failure(.malformedLine(line))
             }
         }

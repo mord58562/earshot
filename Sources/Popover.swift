@@ -497,7 +497,7 @@ private struct HeroCurveView: View {
 
 /// Curve renderer. Uses SwiftUI's `Canvas` so the path is drawn directly at
 /// native display resolution (avoids `drawingGroup`'s bitmap pixelation on
-/// Retina) and the GPU handles the per-frame stroke/fill in one pass —
+/// Retina) and the GPU handles the per-frame stroke/fill in one pass -
 /// faster than two separate `Path` views for drag-time redraws.
 private struct CurveLayer: View {
     let bands: [EQBand]
@@ -1256,7 +1256,7 @@ private struct EQCurveView: View {
 
                 // The curve is recomputed on every band change. Rasterizing
                 // it to a single Metal layer (drawingGroup) keeps the cost
-                // of drag-time redraws bounded — without it, both the fill
+                // of drag-time redraws bounded - without it, both the fill
                 // and stroke paths re-tessellate on every gesture event.
                 CurveLayer(
                     bands: state.workingBands,
@@ -1271,7 +1271,7 @@ private struct EQCurveView: View {
                 if interactive {
                     let bands = state.workingBands
 
-                    // Vertical guide through the active dot — strongest
+                    // Vertical guide through the active dot - strongest
                     // possible "this is the one you're touching" signal.
                     if let id = draggingBandID ?? hoveredBandID,
                        let band = bands.first(where: { $0.id == id }) {
@@ -1303,7 +1303,7 @@ private struct EQCurveView: View {
                     // dropping exits). A strict 8pt-radius test means the
                     // hand cursor and highlight appear ONLY when the
                     // pointer is literally within a dot's 16pt-diameter
-                    // hit zone — identical area to the click target.
+                    // hit zone - identical area to the click target.
                     Rectangle()
                         .fill(Color.clear)
                         .contentShape(Rectangle())
@@ -1338,7 +1338,7 @@ private struct EQCurveView: View {
                     // Readout shows on hover OR drag, anchored just above
                     // the active dot (clamped to the canvas so it never
                     // walks off screen). Cursor-adjacent placement is the
-                    // norm in pro EQs — eyes are already on the dot.
+                    // norm in pro EQs - eyes are already on the dot.
                     if let id = draggingBandID ?? hoveredBandID,
                        let band = bands.first(where: { $0.id == id }) {
                         let pt = EQCurveView.pointForBand(band, viewSize: geo.size)
@@ -1391,7 +1391,7 @@ private struct EQCurveView: View {
 
     /// Right-click menu shared by every dot. Operates on the band the
     /// interaction layer's hover tracker last identified, so right-click
-    /// over a specific dot opens its menu — and a right-click over empty
+    /// over a specific dot opens its menu - and a right-click over empty
     /// space opens an empty menu (effectively a no-op).
     @ViewBuilder
     private func dotContextMenu(bands: [EQBand]) -> some View {
@@ -1430,7 +1430,7 @@ private struct EQCurveView: View {
     /// uses the press location to find which dot was grabbed (strict 8pt
     /// hit) and captures the anchor; later events apply the translation.
     /// A press not on any dot, with no meaningful translation by the time
-    /// the gesture ends, is treated as a click on empty canvas — which
+    /// the gesture ends, is treated as a click on empty canvas - which
     /// spawns a new parametric band at that freq/gain.
     private func layerDragGesture(bands: [EQBand], viewSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
@@ -1625,7 +1625,7 @@ private struct EQCurveView: View {
                                         width: CGFloat, height: CGFloat) -> [CGPoint] {
         // 256 samples across a ~450pt chart keeps the curve crisp at 2x
         // Retina. Canvas rendering means the transcendental work isn't the
-        // bottleneck — implicit animations during drag were.
+        // bottleneck - implicit animations during drag were.
         let count = 256
         var pts: [CGPoint] = []
         pts.reserveCapacity(count + 1)

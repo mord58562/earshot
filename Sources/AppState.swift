@@ -59,7 +59,7 @@ final class AppState: ObservableObject {
     @Published var lastError: String?
     @Published var isApplyingRouting: Bool = false
 
-    /// When non-nil, only this band is audible — every other band is treated
+    /// When non-nil, only this band is audible - every other band is treated
     /// as bypassed at the engine level. Working state is preserved; restoring
     /// solo to nil re-applies the saved band bypasses.
     @Published var soloedBandID: UUID? {
@@ -114,7 +114,7 @@ final class AppState: ObservableObject {
     }
 
     private func observeAppLifecycle() {
-        // Save when the user tabs away or the system is about to sleep —
+        // Save when the user tabs away or the system is about to sleep -
         // both are good "I might lose the process soon" signals.
         NotificationCenter.default.addObserver(
             forName: NSApplication.willResignActiveNotification,
@@ -492,7 +492,7 @@ final class AppState: ObservableObject {
         // Periodic diagnostic. inPeak is the post-EQ tap; inputRenderAge
         // is "seconds since the input AUHAL render proc last fired"
         // (the authoritative producer-alive signal). ringFrames is
-        // diagnostic only — see the property comment on EQEngine for
+        // diagnostic only - see the property comment on EQEngine for
         // why it's a poor stall signal.
         if now - lastHeartbeatLogAt > 30 {
             lastHeartbeatLogAt = now
@@ -526,7 +526,7 @@ final class AppState: ObservableObject {
         let postSettle = runtime > 3.0
 
         // Failure mode 2: post-EQ tap stopped firing entirely. Output
-        // engine's render thread is dead — restart everything.
+        // engine's render thread is dead - restart everything.
         if postSettle && tapAge > 3.0 {
             if firstObservedTapSilenceAt == 0 {
                 firstObservedTapSilenceAt = now
@@ -542,7 +542,7 @@ final class AppState: ObservableObject {
         firstObservedTapSilenceAt = 0
 
         // Failure mode 3: input AUHAL render proc stopped firing. This
-        // is the unambiguous producer-dead signal — the proc fires
+        // is the unambiguous producer-dead signal - the proc fires
         // whenever BlackHole's clock is driving (no app needs to be
         // writing audio for it to fire, since BlackHole emits zeros
         // when idle). When it stops, the input pipeline really is dead
@@ -710,8 +710,8 @@ final class AppState: ObservableObject {
     /// tear-down/rebuild of the AVAudioEngine + AUHAL within ~10 ms is
     /// what wedged CoreAudio on rapid bypass-toggle: the second
     /// EQEngine.stop() entered and never completed. Funnel everything
-    /// through a single setRouting call instead — same shape as
-    /// enableBypass — so the engine is rebuilt exactly once per click.
+    /// through a single setRouting call instead - same shape as
+    /// enableBypass - so the engine is rebuilt exactly once per click.
     func exitBypass() {
         if isApplyingRouting { return }
         let target: String? = {
@@ -806,23 +806,23 @@ final class AppState: ObservableObject {
     /// is preferable to an audible pump or duck.
     ///
     /// Concretely, this means:
-    ///   - Movement rate is 0.2 dB/sec in BOTH directions, well below
+    /// - Movement rate is 0.2 dB/sec in BOTH directions, well below
     ///     the ~0.4 dB/sec threshold of perceptibility for slow gain
     ///     changes during program material. There's no fast-attack
     ///     path: if a peak suddenly hits clip, we move 0.008 dB on
     ///     that tick like every other tick. The peak clips and that's
     ///     fine; the listener won't hear the gain riding.
-    ///   - The peak-follower envelope has a ~3 s release time. After
+    /// - The peak-follower envelope has a ~3 s release time. After
     ///     a loud peak the envelope stays elevated for several seconds,
     ///     so the preamp doesn't start creeping back up the moment
-    ///     program material gets briefly quieter — natural anticipation
+    ///     program material gets briefly quieter - natural anticipation
     ///     without explicit hold-off bookkeeping. Spiky content sits
     ///     at the peak preamp position; sustainably quiet content
     ///     drifts up only after the envelope has had time to fall.
-    ///   - Aim is -3 dBFS. Steady state with the 3 s envelope keeps
+    /// - Aim is -3 dBFS. Steady state with the 3 s envelope keeps
     ///     peaks living near there, leaving a small but useful safety
     ///     margin without sacrificing loudness.
-    ///   - Hard-capped at 0 dB preamp. Auto only attenuates relative
+    /// - Hard-capped at 0 dB preamp. Auto only attenuates relative
     ///     to unity; if the source is quiet, raise preamp by hand.
     private func autoAdjustPreamp(peak linearPeak: Float) {
         let now = CACurrentMediaTime()
@@ -902,7 +902,7 @@ final class AppState: ObservableObject {
     /// inside high-frequency interactions (e.g. dragging an EQ dot) where we
     /// would otherwise issue dozens of JSON writes per second. Call
     /// `commitBandEdits()` once the gesture ends to flush the final state.
-    /// Snapshots for undo are NOT taken here — the caller should call
+    /// Snapshots for undo are NOT taken here - the caller should call
     /// `recordUndoSnapshot()` once at the start of the gesture so a single
     /// undo unwinds the whole drag.
     func updateBandTransient(id: UUID, transform: (inout EQBand) -> Void) {
@@ -1210,7 +1210,7 @@ final class AppState: ObservableObject {
         // Watchdog: if engine.setRouting hangs in coreaudiod IPC, the
         // completion handler never runs and the UI shows a permanent
         // spinner. Force-clear after 5 s. We do NOT switch to a fallback
-        // output here — coreaudiod stalls during startup are usually
+        // output here - coreaudiod stalls during startup are usually
         // transient (a timing race with another process's audio init,
         // not a real device problem), and silently rewriting the user's
         // saved output to "whatever non-loopback device was first in the
