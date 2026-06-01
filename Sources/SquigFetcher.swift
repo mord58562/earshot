@@ -171,6 +171,93 @@ private func defaultTargetForDbType(_ type: String, source: String) -> String {
 // catalog/PEQ machinery without reflowing 200+ lines of code.
 extension SquigFetcher {
 
+    /// Targets each squig source advertises in its `config.js`. Populated
+    /// at refresh time by `fetchTargetsConfig`. The search sheet unions
+    /// these into the target-curve picker so every reviewer-specific
+    /// target (Antdroid, MRS, RikudouGoku, Bad Guy 2022, Crinacle 2023,
+    /// Super Review, Precogvision, Etymotic, ...) shows up - not just
+    /// the source's default.
+    @MainActor static var supportedTargetsBySource: [String: [String]] = [:]
+
+    /// Did the user's specific-target filter line up with a source the
+    /// catalog entry belongs to. Used by the search sheet so picking
+    /// "Antdroid" surfaces every squig source that supports Antdroid,
+    /// not just whichever source had it as default.
+    @MainActor
+    static func sourceSupports(measurerID: String, target: String) -> Bool {
+        supportedTargetsBySource[measurerID]?.contains(target) ?? false
+    }
+
+    /// Fetch and parse the targets array out of a squig source's config.js.
+    /// CrinGraph configs declare:
+    ///     const targets = [
+    ///         { type:"Δ" , files:["Δ 10dB","IEF Comp"] },
+    ///         { type:"Reference", files:["Harman 2019 IEM","IEF Neutral"] },
+    ///         ...
+    ///     ];
+    /// We strip the Δ / delta groups (those are correction overlays, not
+    /// target curves) and the `Δ X / Comp / Tilt`-named files inside any
+    /// group, then flatten to a list of target file names.
+    static func fetchTargets(_ source: Source) async -> [String] {
+        let cfgURL = source.dataBase.deletingLastPathComponent()
+            .appendingPathComponent("config.js")
+        guard let (data, response) = try? await URLSession.shared.data(from: cfgURL),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let text = String(data: data, encoding: .utf8) else {
+            return []
+        }
+        return parseTargetsFromConfigJS(text)
+    }
+
+    static func parseTargetsFromConfigJS(_ js: String) -> [String] {
+        // Pull the targets array body. Non-greedy so a comment or
+        // unrelated `]` later in the file doesn't get sucked in.
+        let blockRE = try? NSRegularExpression(
+            pattern: #"(?:const|let|var)\s+targets\s*=\s*\[([\s\S]*?)\]\s*;"#)
+        let ns = js as NSString
+        guard let block = blockRE?
+            .firstMatch(in: js, range: NSRange(location: 0, length: ns.length)),
+              block.numberOfRanges >= 2,
+              block.range(at: 1).location != NSNotFound else { return [] }
+        let body = ns.substring(with: block.range(at: 1))
+        let bodyNS = body as NSString
+
+        // Each group: { type:"...", files:[...] }
+        let groupRE = try? NSRegularExpression(
+            pattern: #"\{\s*type\s*:\s*['"]([^'"]*)['"]\s*,\s*files\s*:\s*\[([^\]]+)\]"#)
+        let stringRE = try? NSRegularExpression(pattern: #"['"]([^'"]+)['"]"#)
+        let groups = groupRE?.matches(
+            in: body, range: NSRange(location: 0, length: bodyNS.length)) ?? []
+
+        var out: [String] = []
+        for m in groups {
+            guard m.numberOfRanges >= 3 else { continue }
+            let type = bodyNS.substring(with: m.range(at: 1))
+            // Skip delta / comp groups - those are EQ overlays for
+            // visual A/B comparison, not target curves.
+            let typeLower = type.lowercased()
+            if type.hasPrefix("Δ") || typeLower.contains("delta")
+                || typeLower.contains("compensation") { continue }
+            let filesBlock = bodyNS.substring(with: m.range(at: 2))
+            let filesNS = filesBlock as NSString
+            let strs = stringRE?.matches(
+                in: filesBlock,
+                range: NSRange(location: 0, length: filesNS.length)) ?? []
+            for s in strs {
+                let name = filesNS.substring(with: s.range(at: 1))
+                let lower = name.lowercased()
+                // Same overlay filter applied per-name, because some
+                // sites stuff "Δ 10dB" into a non-delta group.
+                if name.hasPrefix("Δ") || lower.contains(" comp")
+                    || lower.contains(" tilt") || lower.contains("compensation") {
+                    continue
+                }
+                out.append(name)
+            }
+        }
+        return Array(NSOrderedSet(array: out)) as? [String] ?? out
+    }
+
     /// Fetch the phone_book.json for a source and flatten to one
     /// HeadphoneEntry per model. Squig phone_book entries are a mixed
     /// array of strings (`"FQQ"`) and objects (`{name, file, ...}`);

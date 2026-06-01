@@ -303,24 +303,37 @@ enum HeadphoneIndex {
             return ($0.target ?? "") < ($1.target ?? "")
         }
         // Pull live squig sources that AutoEQ does NOT mirror. Each source
-        // is fetched in parallel; any single failure (DNS hiccup, ATS, 404)
-        // is logged and skipped without poisoning the whole refresh.
+        // is fetched in parallel: phone_book.json for the catalog AND
+        // config.js for the targets advertised on that site. Per-site
+        // failures are logged and skipped without poisoning the rest.
         var combined = unique
-        await withTaskGroup(of: [HeadphoneEntry].self) { group in
+        struct SourceResult: Sendable {
+            let id: String
+            let entries: [HeadphoneEntry]
+            let targets: [String]
+        }
+        await withTaskGroup(of: SourceResult.self) { group in
             for source in SquigFetcher.liveSources {
                 group.addTask {
-                    do {
-                        let entries = try await SquigFetcher.fetchCatalog(source)
-                        Log.write("squig \(source.id): \(entries.count) entries")
-                        return entries
-                    } catch {
-                        Log.write("squig \(source.id) failed: \(error.localizedDescription)")
-                        return []
-                    }
+                    async let entriesTask: [HeadphoneEntry] = {
+                        do { return try await SquigFetcher.fetchCatalog(source) }
+                        catch { return [] }
+                    }()
+                    async let targetsTask = SquigFetcher.fetchTargets(source)
+                    let (entries, targets) = await (entriesTask, targetsTask)
+                    return SourceResult(id: source.id, entries: entries, targets: targets)
                 }
             }
-            for await batch in group {
-                combined.append(contentsOf: batch)
+            for await r in group {
+                if !r.entries.isEmpty {
+                    Log.write("squig \(r.id): \(r.entries.count) entries, \(r.targets.count) targets")
+                }
+                combined.append(contentsOf: r.entries)
+                if !r.targets.isEmpty {
+                    await MainActor.run {
+                        SquigFetcher.supportedTargetsBySource[r.id] = r.targets
+                    }
+                }
             }
         }
         var seen2 = Set<String>()

@@ -2326,8 +2326,20 @@ private struct HeadphoneSearchSheet: View {
     // MARK: Data
 
     private var availableTargets: [String] {
-        let raw = state.headphoneIndex.compactMap { $0.target }.filter { !$0.isEmpty }
-        return Array(Set(raw))
+        // Union of targets actually present on AutoEQ-mirrored entries and
+        // every target curve advertised by the squig.link sources in their
+        // config.js files. Without the squig union, the picker only shows
+        // the 4-5 AutoEQ defaults; with it, Antdroid / Bad Guy / MRS /
+        // RikudouGoku / Etymotic / Crinacle 2023 / Super Review and so on
+        // all surface.
+        var union = Set<String>()
+        for e in state.headphoneIndex {
+            if let t = e.target, !t.isEmpty { union.insert(t) }
+        }
+        for (_, targets) in SquigFetcher.supportedTargetsBySource {
+            for t in targets { union.insert(t) }
+        }
+        return Array(union)
     }
 
     private var overEarTargets: [String] {
@@ -2367,7 +2379,20 @@ private struct HeadphoneSearchSheet: View {
         case .allInEar:
             matches = matches.filter { $0.formFactor == .inEar }
         case .specific(let t):
-            matches = matches.filter { $0.target == t }
+            // Keep entries that either are already tagged with this
+            // target (AutoEQ-mirrored case) OR come from a squig source
+            // that supports it (live-fit case). For squig matches we
+            // override the displayed target to the selected one so the
+            // qualifier line reflects what will be imported.
+            matches = matches.compactMap { entry in
+                if entry.target == t { return entry }
+                if SquigFetcher.sourceSupports(measurerID: entry.measurer, target: t) {
+                    var copy = entry
+                    copy.target = t
+                    return copy
+                }
+                return nil
+            }
         }
         return matches
     }
