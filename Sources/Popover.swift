@@ -72,7 +72,7 @@ struct PopoverRoot: View {
             }
         }
         .sheet(isPresented: $showingHeadphoneSearch) {
-            HeadphoneSearchSheet(state: state) {
+            HeadphoneSearchSheet(state: state, library: state.library) {
                 showingHeadphoneSearch = false
             }
         }
@@ -2071,6 +2071,10 @@ private enum CatalogFilter: Equatable {
 
 private struct HeadphoneSearchSheet: View {
     @ObservedObject var state: AppState
+    /// Observed separately so this sheet re-renders on catalog refresh
+    /// without forcing the main popover (which only observes `state`)
+    /// to re-render too.
+    @ObservedObject var library: HeadphoneLibrary
     var onClose: () -> Void
     @State private var query: String = ""
     @State private var didAutoRefresh = false
@@ -2097,7 +2101,7 @@ private struct HeadphoneSearchSheet: View {
             // with a fresh cache wouldn't see the new sources until the
             // 7-day TTL expired.
             let knownSquigIDs = Set(SquigFetcher.liveSources.map(\.id))
-            let cacheHasSquig = state.headphoneIndex.contains {
+            let cacheHasSquig = library.entries.contains {
                 knownSquigIDs.contains($0.measurer)
             }
             if !didAutoRefresh,
@@ -2253,7 +2257,7 @@ private struct HeadphoneSearchSheet: View {
                                                   bottom: 8, trailing: 12))
                         .listRowSeparator(.hidden)
                 } header: {
-                    sectionLabel("Catalog · \(state.headphoneIndex.count)")
+                    sectionLabel("Catalog · \(library.entries.count)")
                 }
             } else {
                 let matches = filteredCatalog()
@@ -2333,7 +2337,7 @@ private struct HeadphoneSearchSheet: View {
         // RikudouGoku / Etymotic / Crinacle 2023 / Super Review and so on
         // all surface.
         var union = Set<String>()
-        for e in state.headphoneIndex {
+        for e in library.entries {
             if let t = e.target, !t.isEmpty { union.insert(t) }
         }
         for (_, targets) in SquigFetcher.supportedTargetsBySource {

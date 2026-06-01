@@ -1,5 +1,15 @@
 import Foundation
 import CryptoKit
+import Combine
+
+/// The catalog of measured headphones, scoped to its own ObservableObject
+/// so a refresh of 20K+ entries doesn't propagate `objectWillChange` to
+/// AppState. The Find-a-preset sheet observes this directly; views in
+/// the main popover hold a reference to AppState only, so they never see
+/// these updates.
+final class HeadphoneLibrary: ObservableObject {
+    @Published var entries: [HeadphoneEntry] = []
+}
 
 private enum SHA256 {
     static func hash(_ s: String) -> String {

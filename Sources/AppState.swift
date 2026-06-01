@@ -66,7 +66,24 @@ final class AppState: ObservableObject {
         didSet { reapplyEQ() }
     }
 
-    @Published var headphoneIndex: [HeadphoneEntry] = []
+    /// 27 K+ catalog lives in its own ObservableObject so updates don't
+    /// trigger objectWillChange on AppState. Without this split, every
+    /// catalog refresh fanned a render storm through the menubar popover
+    /// (which observes `state` directly) and wedged the main thread for
+    /// long enough that clicks stopped landing on the EQ controls. Views
+    /// that actually need the catalog (the Find-a-preset sheet) observe
+    /// `library` directly instead.
+    let library = HeadphoneLibrary()
+
+    /// Backwards-compat shim. Reads only; mutations go through
+    /// library.entries directly. Not @Published - assigning a fresh
+    /// 27 K-entry array would re-render every view that observes
+    /// AppState, which is the whole point we're avoiding.
+    var headphoneIndex: [HeadphoneEntry] {
+        get { library.entries }
+        set { library.entries = newValue }
+    }
+
     @Published var headphoneFetchInProgress: Bool = false
 
     // MARK: - Internals
@@ -99,7 +116,7 @@ final class AppState: ObservableObject {
         startPersistTicker()
         observeAppLifecycle()
         autoApplyOnLaunchIfPossible()
-        headphoneIndex = HeadphoneIndex.load()
+        library.entries = HeadphoneIndex.load()
         checkMicPermission()
     }
 
@@ -1362,8 +1379,8 @@ final class AppState: ObservableObject {
 
     func searchHeadphones(_ query: String) -> [HeadphoneEntry] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if q.isEmpty { return headphoneIndex }
-        return headphoneIndex.filter { $0.name.lowercased().contains(q) }
+        if q.isEmpty { return library.entries }
+        return library.entries.filter { $0.name.lowercased().contains(q) }
     }
 
     /// Fetch the live AutoEQ oratory1990 catalog from GitHub. Replaces the
@@ -1375,7 +1392,11 @@ final class AppState: ObservableObject {
         do {
             let fresh = try await HeadphoneIndex.refreshFromNetwork()
             if !fresh.isEmpty {
-                headphoneIndex = fresh
+                // library is a sibling ObservableObject; assigning here
+                // does NOT fire AppState.objectWillChange, so the main
+                // popover doesn't re-render. Only views that observe
+                // `library` directly (the Find-a-preset sheet) do.
+                library.entries = fresh
                 Log.write("headphone index refreshed: \(fresh.count) entries")
             }
         } catch {
