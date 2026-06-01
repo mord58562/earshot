@@ -2186,45 +2186,52 @@ private struct HeadphoneSearchSheet: View {
 
     @ViewBuilder
     private var targetSections: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            targetRow(title: "Over-ear targets",
-                      allFilter: .allOverEar,
-                      targets: overEarTargets)
-            targetRow(title: "In-ear targets",
-                      allFilter: .allInEar,
-                      targets: inEarTargets)
+        HStack(alignment: .top, spacing: 14) {
+            TargetMenu(label: "Over-ear",
+                       currentLabel: overEarMenuLabel,
+                       isActive: overEarMenuActive,
+                       allFilterSelected: filter == .allOverEar,
+                       targets: overEarTargets,
+                       onClear: { filter = .none },
+                       onAll: { filter = .allOverEar },
+                       onPick: { filter = .specific(target: $0) })
+            TargetMenu(label: "In-ear",
+                       currentLabel: inEarMenuLabel,
+                       isActive: inEarMenuActive,
+                       allFilterSelected: filter == .allInEar,
+                       targets: inEarTargets,
+                       onClear: { filter = .none },
+                       onAll: { filter = .allInEar },
+                       onPick: { filter = .specific(target: $0) })
         }
     }
 
-    @ViewBuilder
-    private func targetRow(title: String,
-                           allFilter: CatalogFilter,
-                           targets: [String]) -> some View {
-        if !targets.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(.tertiary)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        // The "all over-ear / all in-ear" pill lets the
-                        // user scope to a form factor without committing
-                        // to a specific target curve. Toggle behaviour:
-                        // tapping the active pill clears the filter.
-                        TargetPill(label: "All", selected: filter == allFilter) {
-                            filter = (filter == allFilter) ? .none : allFilter
-                        }
-                        ForEach(targets, id: \.self) { t in
-                            let isSel = filter == .specific(target: t)
-                            TargetPill(label: t, selected: isSel) {
-                                filter = isSel ? .none : .specific(target: t)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    private var overEarMenuLabel: String {
+        if case .specific(let t) = filter,
+           HeadphoneEntry.formFactor(forTarget: t) == .overEar { return t }
+        if filter == .allOverEar { return "All over-ear" }
+        return "Any target"
+    }
+
+    private var inEarMenuLabel: String {
+        if case .specific(let t) = filter,
+           HeadphoneEntry.formFactor(forTarget: t) == .inEar { return t }
+        if filter == .allInEar { return "All in-ear" }
+        return "Any target"
+    }
+
+    private var overEarMenuActive: Bool {
+        if filter == .allOverEar { return true }
+        if case .specific(let t) = filter,
+           HeadphoneEntry.formFactor(forTarget: t) == .overEar { return true }
+        return false
+    }
+
+    private var inEarMenuActive: Bool {
+        if filter == .allInEar { return true }
+        if case .specific(let t) = filter,
+           HeadphoneEntry.formFactor(forTarget: t) == .inEar { return true }
+        return false
     }
 
     // MARK: Results
@@ -2398,31 +2405,133 @@ private struct HeadphoneSearchSheet: View {
     }
 }
 
-private struct TargetPill: View {
-    let label: String
-    let selected: Bool
-    let action: () -> Void
-    @State private var hovering = false
+/// Per-form-factor target picker. Replaces the wraparound pill row,
+/// which scrolled off-screen once squig.link's reviewer-specific targets
+/// (Antdroid, MRS, RikudouGoku, Bad Guy, Crinacle 2023, ...) joined the
+/// list. The menu is sectioned by family so the canonical Harman / IEF /
+/// JM-1 references stay one glance away while the long tail lives under
+/// "Reviewer-tuned" without crowding the layout.
+private struct TargetMenu: View {
+    let label: String           // "Over-ear" / "In-ear"
+    let currentLabel: String    // displayed inside the pill
+    let isActive: Bool          // pill renders accent when the filter is in this scope
+    let allFilterSelected: Bool // for the "All <label>" checkmark
+    let targets: [String]
+    let onClear: () -> Void
+    let onAll: () -> Void
+    let onPick: (String) -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 11, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(label) target".uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+            Menu {
+                Button {
+                    onAll()
+                } label: {
+                    if allFilterSelected {
+                        Label("All \(label.lowercased())", systemImage: "checkmark")
+                    } else {
+                        Text("All \(label.lowercased())")
+                    }
+                }
+                if isActive { Button("Clear filter", action: onClear) }
+                Divider()
+                let grouped = groupedByFamily(targets)
+                if !grouped.reference.isEmpty {
+                    Section("Reference") {
+                        ForEach(grouped.reference, id: \.self) { t in
+                            menuItem(t)
+                        }
+                    }
+                }
+                if !grouped.reviewer.isEmpty {
+                    Section("Reviewer-tuned") {
+                        ForEach(grouped.reviewer, id: \.self) { t in
+                            menuItem(t)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentLabel)
+                        .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundStyle(isActive
                     ? AnyShapeStyle(Color.white)
-                    : (hovering ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)))
+                    : AnyShapeStyle(.primary))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 99, style: .continuous)
-                        .fill(selected
+                        .fill(isActive
                             ? AnyShapeStyle(Color.accentColor)
-                            : AnyShapeStyle(hovering ? .quaternary : .quinary))
+                            : AnyShapeStyle(.quinary))
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 99, style: .continuous)
+                        .strokeBorder(.quaternary.opacity(isActive ? 0 : 0.6),
+                                      lineWidth: 0.5)
+                )
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.08), value: hovering)
+    }
+
+    @ViewBuilder
+    private func menuItem(_ t: String) -> some View {
+        Button {
+            onPick(t)
+        } label: {
+            if t == currentLabel {
+                Label(t, systemImage: "checkmark")
+            } else {
+                Text(t)
+            }
+        }
+    }
+
+    private struct Grouped {
+        let reference: [String]
+        let reviewer: [String]
+    }
+
+    /// Reference = the well-known industry tunings (Harman / AutoEQ / IEF
+    /// / JM-1 / Diffuse Field / Free Field / Etymotic). Reviewer-tuned =
+    /// everything else (Antdroid, MRS, HBB, RikudouGoku, Bad Guy 2022,
+    /// Crinacle 2023 Adjusted, Precogvision, Super* Review and friends).
+    private func groupedByFamily(_ targets: [String]) -> Grouped {
+        let referenceKeywords = [
+            "harman", "autoeq", "ief", "jm-1", "jm1",
+            "diffuse field", "free field", "etymotic"
+        ]
+        var reference: [String] = []
+        var reviewer: [String] = []
+        for t in targets {
+            let l = t.lowercased()
+            if referenceKeywords.contains(where: { l.contains($0) }) {
+                reference.append(t)
+            } else {
+                reviewer.append(t)
+            }
+        }
+        return Grouped(
+            reference: reference.sorted { sortHarmanFirst($0, $1) },
+            reviewer: reviewer.sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+    }
+
+    private func sortHarmanFirst(_ a: String, _ b: String) -> Bool {
+        let ah = a.lowercased().hasPrefix("harman")
+        let bh = b.lowercased().hasPrefix("harman")
+        if ah != bh { return ah }
+        return a.localizedStandardCompare(b) == .orderedAscending
     }
 }
 
