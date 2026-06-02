@@ -465,7 +465,10 @@ enum FRToPEQ {
                                                fMin: 20, fMax: 15000) else {
                 break
             }
-            if abs(value) < 0.5 { break }
+            // 0.1 dB threshold matches squig's published equalizer.js;
+            // the previous 0.5 dB stop was 5x looser and under-fit
+            // neutral-ish FRs.
+            if abs(value) < 0.1 { break }
             let f = grid[idx]
             let q: Float = 1.41
             let gain = max(-12, min(12, value))
@@ -482,9 +485,11 @@ enum FRToPEQ {
         return bands
     }
 
-    /// Preamp = -max(0, residual peak). Negative because we attenuate to
-    /// keep the post-EQ signal under 0 dBFS; positive residual means the
-    /// EQ adds gain somewhere and we need headroom.
+    /// Preamp = -max(0, residual peak) - 0.5 dB headroom. Negative
+    /// because we attenuate to keep the post-EQ signal under 0 dBFS;
+    /// the 0.5 dB margin matches squig's UI behaviour and absorbs the
+    /// intersample-peak overshoot that can appear when downstream
+    /// playback resamples to 192 kHz.
     static func preamp(bands: [EQBand]) -> Float {
         guard !bands.isEmpty else { return 0 }
         let grid = logGrid(fMin: 20, fMax: 20000, perOctave: 96)
@@ -496,8 +501,9 @@ enum FRToPEQ {
             }
             if sum > maxGain { maxGain = sum }
         }
-        // Round to 0.1 dB; never positive (we don't make-up gain).
-        return -max(0, (maxGain * 10).rounded() / 10)
+        // Round to 0.1 dB; never positive (we don't add make-up gain).
+        let needed = (maxGain * 10).rounded() / 10
+        return needed > 0 ? -(needed + 0.5) : 0
     }
 
     // MARK: Resampling
@@ -548,6 +554,10 @@ enum FRToPEQ {
         return bestIdx >= 0 ? (bestIdx, delta[bestIdx]) : nil
     }
 
+    /// Coordinate descent per (axis, direction). Per the published
+    /// equalizer.js, each step size is exhausted in a `while improved`
+    /// loop before moving on - the previous one-step-per-pass shape
+    /// systematically under-fit. Step sizes match squig.
     private static func refine(band: EQBand,
                                delta: [Float], grid: [Float]) -> EQBand {
         var current = band
@@ -560,21 +570,29 @@ enum FRToPEQ {
             let sq = stepsQ[pass]
             let sg = stepsGain[pass]
             for axis in ["f", "q", "g"] {
-                for dir in [1.0, -1.0] {
-                    var trial = current
-                    switch axis {
-                    case "f":
-                        trial.frequency = max(20, min(20000,
-                            dir > 0 ? trial.frequency * sf : trial.frequency / sf))
-                    case "q":
-                        trial.q = max(0.3, min(8,
-                            dir > 0 ? trial.q + sq : trial.q - sq))
-                    default:
-                        trial.gain = max(-12, min(12,
-                            dir > 0 ? trial.gain + sg : trial.gain - sg))
+                for dir: Float in [1.0, -1.0] {
+                    var improved = true
+                    while improved {
+                        improved = false
+                        var trial = current
+                        switch axis {
+                        case "f":
+                            trial.frequency = max(20, min(20000,
+                                dir > 0 ? trial.frequency * sf : trial.frequency / sf))
+                        case "q":
+                            trial.q = max(0.3, min(8,
+                                dir > 0 ? trial.q + sq : trial.q - sq))
+                        default:
+                            trial.gain = max(-12, min(12,
+                                dir > 0 ? trial.gain + sg : trial.gain - sg))
+                        }
+                        let err = residualSquared(band: trial, delta: delta, grid: grid)
+                        if err < bestErr {
+                            current = trial
+                            bestErr = err
+                            improved = true
+                        }
                     }
-                    let err = residualSquared(band: trial, delta: delta, grid: grid)
-                    if err < bestErr { current = trial; bestErr = err }
                 }
             }
         }

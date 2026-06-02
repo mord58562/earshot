@@ -152,6 +152,10 @@ def fetch_one(source_id, db_type, data_url, cfg_url, username):
                 else:
                     file_base = f"{bname} {model_name}"
             display = f"{prefix} {model_name}".strip()
+            # Skip empty rows (some brands declare an entry with no model name,
+            # producing a phantom empty-string headphone in the picker).
+            if not display or not file_base.strip():
+                continue
             raw_url = data_url + urllib.parse.quote(file_base, safe=" ()&,.+'")
             entries.append({
                 "name": display,
@@ -211,8 +215,11 @@ def main():
     (RES / "squig_catalog.json").write_text(
         json.dumps(unique, indent=1, ensure_ascii=False) + "\n"
     )
+    # Sort the targets dict by source id so git diffs after a refresh are
+    # signal-only - ThreadPoolExecutor completion order varies per run.
+    sorted_targets = {k: targets_map[k] for k in sorted(targets_map.keys())}
     (RES / "squig_targets.json").write_text(
-        json.dumps(targets_map, indent=1, ensure_ascii=False) + "\n"
+        json.dumps(sorted_targets, indent=1, ensure_ascii=False) + "\n"
     )
     print(f"wrote {len(unique)} squig entries and {sum(len(v) for v in targets_map.values())} target names "
           f"across {len(targets_map)} sources",

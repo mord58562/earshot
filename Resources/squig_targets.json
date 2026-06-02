@@ -1,4 +1,64 @@
 {
+ "achoreviews": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Acho Reviews",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "adri-n": [
+  "Adri-N",
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "aftersound": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "IEF Neutral 2020",
+  "IEF Neutral 2023",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "IEF neutral",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "animagus": [
+  "Animagus IEM Preference",
+  "Animagus Headphone Preference",
+  "Animagus Neutral",
+  "IEF Neutral",
+  "Harman In Room",
+  "Etymotic",
+  "Harman In Ear 2019",
+  "Harman Over Ear 2018",
+  "Diffuse Field"
+ ],
  "ankramutt": [
   "Ankramutt HRTF",
   "Ankramutt HRTF Bass",
@@ -27,60 +87,6 @@
   "HBB (Compensated)",
   "Timmy (Compensated)"
  ],
- "auricularesargentina": [
-  "AA Neutral",
-  "AA Neutral Diffuse",
-  "Harman 2018",
-  "AA IEMS",
-  "Harman 2019",
-  "IEF 2023",
-  "IEF 2020",
-  "Free Field",
-  "Diffuse Field"
- ],
- "adri-n": [
-  "Adri-N",
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "achoreviews": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Acho Reviews",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "animagus": [
-  "Animagus IEM Preference",
-  "Animagus Headphone Preference",
-  "Animagus Neutral",
-  "IEF Neutral",
-  "Harman In Room",
-  "Etymotic",
-  "Harman In Ear 2019",
-  "Harman Over Ear 2018",
-  "Diffuse Field"
- ],
  "arn": [
   "Crin 2023",
   "Harman Adjusted",
@@ -89,28 +95,6 @@
   "Super Review",
   "Crinacle Neutral 2023",
   "Crinacle Neutral"
- ],
- "theaudiostore": [
-  "Harman IE 2019",
-  "IEF Neutral 2023",
-  "Super 22 Adjusted"
- ],
- "aftersound": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "IEF Neutral 2020",
-  "IEF Neutral 2023",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "IEF neutral",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
  ],
  "atechreviews": [
   "Harman 2019",
@@ -128,13 +112,16 @@
   "Super Review",
   "Harman"
  ],
- "bassaudio": [
-  "BassAudio",
-  "Harman IE 2019",
-  "Precogvision",
-  "IEF Neutral 2023",
-  "Super 22 Adjusted",
-  "IEF Neutral 2020"
+ "auricularesargentina": [
+  "AA Neutral",
+  "AA Neutral Diffuse",
+  "Harman 2018",
+  "AA IEMS",
+  "Harman 2019",
+  "IEF 2023",
+  "IEF 2020",
+  "Free Field",
+  "Diffuse Field"
  ],
  "awsmdanny": [
   "Diffuse Field",
@@ -167,13 +154,13 @@
   "Precogvision",
   "Super Review"
  ],
- "cammyfi-headphones-clone": [
-  "KEMAR KB50xx DF",
-  "KEMAR DF",
-  "PEQdB OE",
-  "Harman 2018 Over-Ear",
-  "Generic Diffuse Field",
-  "IEF Neutral"
+ "bassaudio": [
+  "BassAudio",
+  "Harman IE 2019",
+  "Precogvision",
+  "IEF Neutral 2023",
+  "Super 22 Adjusted",
+  "IEF Neutral 2020"
  ],
  "bassyalexander": [
   "Alexander",
@@ -191,25 +178,6 @@
   "Rtings",
   "Sonarworks"
  ],
- "breampike": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "boizoff-headphones": [
-  "Harman 2018 wo. bass (for KB501X)",
-  "Harman 2018 (for KB501X)"
- ],
  "bedrock": [
   "Personal JM-1 DF (Tilt_ -0.8dB_Oct, B_ 4dB, T_ 2dB)",
   "Antdroid",
@@ -219,7 +187,19 @@
   "Moondrop VDSF",
   "Harman"
  ],
- "bukanaudiophile": [
+ "boizoff": [
+  "∆ JM-1 (Tilt -1 dB|oct)",
+  "IEF Neutral IE 2023",
+  "Diffuse Field",
+  "Harman IE 2019 v2",
+  "∆ IEF Preference 2025",
+  "PEQdB IE"
+ ],
+ "boizoff-headphones": [
+  "Harman 2018 wo. bass (for KB501X)",
+  "Harman 2018 (for KB501X)"
+ ],
+ "breampike": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -249,21 +229,51 @@
   "Bad Guy",
   "Banbeucmas"
  ],
+ "bukanaudiophile": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "cammyfi-headphones-clone": [
+  "KEMAR KB50xx DF",
+  "KEMAR DF",
+  "PEQdB OE",
+  "Harman 2018 Over-Ear",
+  "Generic Diffuse Field",
+  "IEF Neutral"
+ ],
  "cammyfi-iems": [
   "Etymotic",
   "Diffuse Field",
   "Free Field",
   "Harman IE 2019 v2"
  ],
- "boizoff": [
-  "∆ JM-1 (Tilt -1 dB|oct)",
-  "IEF Neutral IE 2023",
-  "Diffuse Field",
-  "Harman IE 2019 v2",
-  "∆ IEF Preference 2025",
-  "PEQdB IE"
- ],
  "capraaudio-Headphones": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "cqtek": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -285,6 +295,26 @@
   "IEF Neutral 2023",
   "Super 22 Adjusted"
  ],
+ "dhrme": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Crinacle",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "dhrme-headphones": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Crinacle",
+  "Super Review",
+  "Harman"
+ ],
  "digaoreviews": [
   "Android",
   "Bad Guy",
@@ -293,6 +323,81 @@
   "Harman IE 2019",
   "IEF Neutral 2023",
   "Super Review"
+ ],
+ "dl": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "RikudouGoku",
+  "Harman 2019v2",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "dl-headphones": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "ducbloke": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Bad Guy",
+  "DucBloke BASS-1",
+  "DucBloke BASS-2",
+  "DucBloke BASS-3",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "ekaudio": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "eliseaudio": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
  ],
  "elrics": [
   "∆ 5128DF for 711",
@@ -314,20 +419,6 @@
   "Rtings",
   "Sonarworks"
  ],
- "dl-headphones": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
  "elrics-headphones": [
   "KEMAR DF (KB50xx)",
   "KEMAR DF (KB50xx) + 2018 Filters",
@@ -341,16 +432,7 @@
   "Harman OE 2015",
   "Harman OE 2013"
  ],
- "dhrme-headphones": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Crinacle",
-  "Super Review",
-  "Harman"
- ],
- "dl": [
+ "enemyspider": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -361,11 +443,25 @@
   "Crinacle",
   "Precogvision",
   "Super Review",
-  "RikudouGoku",
-  "Harman 2019v2",
   "Harman",
   "Rtings",
   "Sonarworks"
+ ],
+ "eplv": [
+  "Harman2019v2",
+  "Diffuse Field",
+  "AutoEQ",
+  "Etymotic",
+  "Free Field",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "IEF Neutral",
+  "Old Crinacle",
+  "Precogvision",
+  "Rtings",
+  "Sonarworks",
+  "Super Review"
  ],
  "fahryst": [
   "JM-1",
@@ -390,68 +486,22 @@
   "Rtings",
   "Sonarworks"
  ],
- "ekaudio": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "dhrme": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Crinacle",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "ducbloke": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Bad Guy",
-  "DucBloke BASS-1",
-  "DucBloke BASS-2",
-  "DucBloke BASS-3",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
  "fernandagunsan": [
   "JM1 for 711",
   "Gunsan Fun JM1",
   "Harman IE 2019",
   "IEF Neutral 2023"
  ],
- "eliseaudio": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
+ "filk": [
+  "KEMAR DF (KB006x)",
+  "Filk v2",
+  "Harman OE 2018"
  ],
- "enemyspider": [
+ "filk-iems": [
+  "Harman IE 2019",
+  "ISO 11904-2"
+ ],
+ "flare": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -488,22 +538,6 @@
   "Listener 1db",
   "Listener 1.4db"
  ],
- "eplv": [
-  "Harman2019v2",
-  "Diffuse Field",
-  "AutoEQ",
-  "Etymotic",
-  "Free Field",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "IEF Neutral",
-  "Old Crinacle",
-  "Precogvision",
-  "Rtings",
-  "Sonarworks",
-  "Super Review"
- ],
  "gadgetgenerations": [
   "Diffuse Field",
   "Free Field",
@@ -512,40 +546,6 @@
   "Harman",
   "Rtings",
   "Sonarworks"
- ],
- "filk-iems": [
-  "Harman IE 2019",
-  "ISO 11904-2"
- ],
- "filk": [
-  "KEMAR DF (KB006x)",
-  "Filk v2",
-  "Harman OE 2018"
- ],
- "flare": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "hadoe-earbuds": [
-  "ISO 11904-2 DF",
-  "KB50XX DF",
-  "Hadoe Headphone"
- ],
- "hadoe-headphones": [
-  "KB50XX DF",
-  "ISO 11904-2 DF",
-  "Hadoe Headphone"
  ],
  "gadgetrytech": [
   "IEF Preference 2025",
@@ -559,32 +559,28 @@
   "Valorant (Coming Soon)",
   "Fortnite (Coming Soon)"
  ],
- "hoods": [
-  "Hoods 2025 Adjusted",
-  "Harman IE 2019",
-  "IEF Neutral 2023",
-  "Etymotic"
+ "gadgetrytech-headsets": [
+  "KEMAR DF (KB006x)",
+  "Harman 2018",
+  "Harman 2013",
+  "Warzone 2025",
+  "Black Ops 6 MP",
+  "BF6 (Beta EQ)",
+  "Apex Legends",
+  "XDefiant",
+  "R6 Siege (Coming Soon - For real this time)",
+  "Valorant (Coming Soon)",
+  "Fortnite (Coming Soon)"
  ],
- "hbb": [
-  "Bad Guy 2022",
-  "Crinacle 2023 Adjusted",
-  "Super 2022 Adjusted",
-  "Bad Guy",
-  "MRS",
-  "IEF",
-  "Timmy",
-  "Antdroid",
-  "RikudouGoku",
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Precog",
-  "Redeyes"
+ "hadoe-earbuds": [
+  "ISO 11904-2 DF",
+  "KB50XX DF",
+  "Hadoe Headphone"
  ],
- "iemworld-headphones": [
-  "Open Back Neutral",
-  "Closed Back Neutral",
-  "Harman OE 2018 Linear"
+ "hadoe-headphones": [
+  "KB50XX DF",
+  "ISO 11904-2 DF",
+  "Hadoe Headphone"
  ],
  "hana": [
   "IEF Neutral 2023",
@@ -608,7 +604,127 @@
   "Etymotic",
   "Free Field"
  ],
- "cqtek": [
+ "hbb": [
+  "Bad Guy 2022",
+  "Crinacle 2023 Adjusted",
+  "Super 2022 Adjusted",
+  "Bad Guy",
+  "MRS",
+  "IEF",
+  "Timmy",
+  "Antdroid",
+  "RikudouGoku",
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Precog",
+  "Redeyes"
+ ],
+ "hobbytalk": [
+  "Hobby Talk Preference",
+  "Harman IE 2019",
+  "Harman",
+  "Etymotic",
+  "Diffuse Field",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Honest",
+  "IEF Neutral 2023",
+  "IEF Neutral",
+  "IEF OE",
+  "Precogvision",
+  "Super Review"
+ ],
+ "hoods": [
+  "Hoods 2025 Adjusted",
+  "Harman IE 2019",
+  "IEF Neutral 2023",
+  "Etymotic"
+ ],
+ "hore": [
+  "Crinacle 2023 Adjusted",
+  "Harman Adjusted",
+  "Diffuse Field",
+  "Free Field",
+  "Harman",
+  "Etymotic",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "hu-fi": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Hu-Fi IE2025",
+  "Retro",
+  "Recall 2024",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Crinacle OE",
+  "Precogvision",
+  "Super Review",
+  "Harman IE2019V2",
+  "Harman OE2018",
+  "Rtings",
+  "5128 VDSF OE B3",
+  "Sonarworks"
+ ],
+ "ianfann": [
+  "IEF Neutral 2023",
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "IanFann-Target",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman 2019",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "iemocean": [
+  "Harman IE2019v2 Adjusted",
+  "Crinacle 2020",
+  "Preference"
+ ],
+ "iemworld": [
+  "IEM WORLD 2024",
+  "IEM WORLD 2022",
+  "Crinacle",
+  "Bad Guy",
+  "Super Review",
+  "Banbeucmas",
+  "Precogvision",
+  "Antdroid",
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "iemworld-headphones": [
+  "Open Back Neutral",
+  "Closed Back Neutral",
+  "Harman OE 2018 Linear"
+ ],
+ "isaiahse": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -619,6 +735,17 @@
   "Crinacle",
   "Precogvision",
   "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "jacstone": [
+  "Harman 2019",
+  "IEF Neutral",
+  "nymz",
+  "Paul Wasabii",
+  "RikudouGoku",
+  "Sharur",
   "Harman",
   "Rtings",
   "Sonarworks"
@@ -644,208 +771,6 @@
   "Bad Guy",
   "Precogvision"
  ],
- "hore": [
-  "Crinacle 2023 Adjusted",
-  "Harman Adjusted",
-  "Diffuse Field",
-  "Free Field",
-  "Harman",
-  "Etymotic",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Rtings",
-  "Sonarworks"
- ],
- "hobbytalk": [
-  "Hobby Talk Preference",
-  "Harman IE 2019",
-  "Harman",
-  "Etymotic",
-  "Diffuse Field",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Honest",
-  "IEF Neutral 2023",
-  "IEF Neutral",
-  "IEF OE",
-  "Precogvision",
-  "Super Review"
- ],
- "gadgetrytech-headsets": [
-  "KEMAR DF (KB006x)",
-  "Harman 2018",
-  "Harman 2013",
-  "Warzone 2025",
-  "Black Ops 6 MP",
-  "BF6 (Beta EQ)",
-  "Apex Legends",
-  "XDefiant",
-  "R6 Siege (Coming Soon - For real this time)",
-  "Valorant (Coming Soon)",
-  "Fortnite (Coming Soon)"
- ],
- "joycesreview": [
-  "Harman IE 2019",
-  "IEF Neutral 2023",
-  "Super 22 Adjusted"
- ],
- "isaiahse": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "ianfann": [
-  "IEF Neutral 2023",
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "IanFann-Target",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman 2019",
-  "Rtings",
-  "Sonarworks"
- ],
- "iemocean": [
-  "Harman IE2019v2 Adjusted",
-  "Crinacle 2020",
-  "Preference"
- ],
- "hu-fi": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Hu-Fi IE2025",
-  "Retro",
-  "Recall 2024",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Crinacle OE",
-  "Precogvision",
-  "Super Review",
-  "Harman IE2019V2",
-  "Harman OE2018",
-  "Rtings",
-  "5128 VDSF OE B3",
-  "Sonarworks"
- ],
- "iemworld": [
-  "IEM WORLD 2024",
-  "IEM WORLD 2022",
-  "Crinacle",
-  "Bad Guy",
-  "Super Review",
-  "Banbeucmas",
-  "Precogvision",
-  "Antdroid",
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "kuulokenurkka": [
-  "Diffuse Field",
-  "Harman 2018",
-  "Harman 2018 With Linear Bass",
-  "KEMAR KB50xx DF",
-  "KB501X DF (Harman 2018 Filters)",
-  "Harman 2019"
- ],
- "kuping-sensi": [
-  "Harman IE 2019",
-  "IEF Neutral 2023",
-  "Super 22 Adjusted"
- ],
- "jacstone": [
-  "Harman 2019",
-  "IEF Neutral",
-  "nymz",
-  "Paul Wasabii",
-  "RikudouGoku",
-  "Sharur",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "koi": [
-  "IEF Neutral 2023",
-  "Harman IE 2019",
-  "Jaytiss",
-  "Bad Guy",
-  "Super Review"
- ],
- "joshtbvo": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "kazi": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "kr0mka": [
-  "IEF Neutral 2023",
-  "IEF Neutral 2020",
-  "Harman IE 2019 v2",
-  "Harman IE 2017 v2",
-  "Harman IE 2016"
- ],
- "kr0mka-headphones": [
-  "KB501X DF",
-  "ISO 11904-2 DF",
-  "Harman OE 2013",
-  "Harman OE 2015",
-  "Harman OE 2018",
-  "IEF Neutral"
- ],
  "jaytiss": [
   "Jaytiss",
   "Diffuse Field",
@@ -862,12 +787,82 @@
   "Rtings",
   "Sonarworks"
  ],
+ "joshtbvo": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "joycesreview": [
+  "Harman IE 2019",
+  "IEF Neutral 2023",
+  "Super 22 Adjusted"
+ ],
+ "kazi": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "koi": [
+  "IEF Neutral 2023",
+  "Harman IE 2019",
+  "Jaytiss",
+  "Bad Guy",
+  "Super Review"
+ ],
+ "kr0mka": [
+  "IEF Neutral 2023",
+  "IEF Neutral 2020",
+  "Harman IE 2019 v2",
+  "Harman IE 2017 v2",
+  "Harman IE 2016"
+ ],
+ "kr0mka-headphones": [
+  "KB501X DF",
+  "ISO 11904-2 DF",
+  "Harman OE 2013",
+  "Harman OE 2015",
+  "Harman OE 2018",
+  "IEF Neutral"
+ ],
+ "kuping-sensi": [
+  "Harman IE 2019",
+  "IEF Neutral 2023",
+  "Super 22 Adjusted"
+ ],
+ "kuulokenurkka": [
+  "Diffuse Field",
+  "Harman 2018",
+  "Harman 2018 With Linear Bass",
+  "KEMAR KB50xx DF",
+  "KB501X DF (Harman 2018 Filters)",
+  "Harman 2019"
+ ],
  "lestat": [
   "Harman IE 2019",
   "IEF Neutral 2023",
   "Super 22 Adjusted"
  ],
- "melatonin": [
+ "lown-fi": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -887,26 +882,7 @@
   "IEF Neutral 2023",
   "Super 22 Adjusted"
  ],
- "nymz": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "nymz",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "RikudouGoku",
-  "tgx78",
-  "Timmy",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "lown-fi": [
+ "melatonin": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
@@ -950,13 +926,54 @@
   "Rtings",
   "Sonarworks"
  ],
- "ragnarok-headphones": [
-  "KEMAR DF (KB50xx)",
-  "Harman 2018",
-  "Harman 2013"
+ "nymz": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "nymz",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "RikudouGoku",
+  "tgx78",
+  "Timmy",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
  ],
- "ragnarok": [
-  "Diffuse Field"
+ "practiphile": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Practiphile Neutral",
+  "Practiphile Balanced V4",
+  "Harman_IE_2019",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "precog": [
+  "Antdroid",
+  "Banbeu",
+  "HBB",
+  "MRS",
+  "Nymz",
+  "Precog",
+  "RikudouGoku",
+  "Tork V5",
+  "Harman 2019 IEM",
+  "IEF Neutral"
  ],
  "pw": [
   "Harman 2019v2",
@@ -978,51 +995,13 @@
   "Innerfidelity ID",
   "Free Field"
  ],
- "precog": [
-  "Antdroid",
-  "Banbeu",
-  "HBB",
-  "MRS",
-  "Nymz",
-  "Precog",
-  "RikudouGoku",
-  "Tork V5",
-  "Harman 2019 IEM",
-  "IEF Neutral"
+ "ragnarok": [
+  "Diffuse Field"
  ],
- "practiphile": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Practiphile Neutral",
-  "Practiphile Balanced V4",
-  "Harman_IE_2019",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "regancipher": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Harman 2019 IE v2",
-  "Harman 2018 OE",
-  "Rtings",
-  "Sonarworks",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review"
+ "ragnarok-headphones": [
+  "KEMAR DF (KB50xx)",
+  "Harman 2018",
+  "Harman 2013"
  ],
  "recode": [
   "Diffuse Field",
@@ -1041,20 +1020,21 @@
   "Precogvision",
   "Super Review"
  ],
- "riz": [
+ "regancipher": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
   "Innerfidelity ID",
+  "Harman 2019 IE v2",
+  "Harman 2018 OE",
+  "Rtings",
+  "Sonarworks",
   "Antdroid",
   "Bad Guy",
   "Banbeucmas",
   "Crinacle",
   "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
+  "Super Review"
  ],
  "rg": [
   "ALPHA 1.0",
@@ -1092,6 +1072,121 @@
   "tgx78",
   "TKSilver"
  ],
+ "riz": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "sai": [
+  "Harman OE 2018 Linear",
+  "HiRes Harman 2018 OE (KB50XX)",
+  "Diffuse Field",
+  "unheardlab OE",
+  "unheardlab IEM",
+  "Harman OE 2018",
+  "Harman OE 2015",
+  "Harman OE 2013",
+  "Harman IE 2019 V2"
+ ],
+ "samreviews": [
+  "Sam Reviews SR-IE 2025",
+  "Sam Reviews SR-IE Devastator",
+  "Harman IE 2019",
+  "IEF Neutral 2023",
+  "Super 22 Adjusted",
+  "Sam Reviews SR-IE Airline",
+  "Rtings",
+  "Diffuse Field",
+  "Crinacle",
+  "Bad Guy",
+  "Etymotic"
+ ],
+ "scboy": [
+  "SCB",
+  "Bad Guy",
+  "Crinacle",
+  "Crinacle 2023",
+  "Oratory1990",
+  "Harman IE2019v2",
+  "IE 2024 + BASS",
+  "Diffuse Field",
+  "5128 to 711"
+ ],
+ "seanwee": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "sl0the": [
+  "Harman 2019v2",
+  "IEF Neutral 2020",
+  "IEF Neutral 2023",
+  "Crinacle 2023 Adjusted",
+  "Timmy"
+ ],
+ "smirk": [
+  "711 JM-1 10db",
+  "IEF Preference 2025 711",
+  "Crinacle",
+  "Harman"
+ ],
+ "soundcheck39": [
+  "Diffuse Field",
+  "Etymotic",
+  "Free Field",
+  "Innerfidelity ID",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle",
+  "Precogvision",
+  "Super Review",
+  "Harman",
+  "Rtings",
+  "Sonarworks"
+ ],
+ "superreview": [
+  "Super 22",
+  "Crinacle 2023 Adjusted",
+  "Harman IE 2019",
+  "Crinacle Adjusted",
+  "Antdroid",
+  "Bad Guy",
+  "Banbeucmas",
+  "Crinacle Neutral",
+  "Crinacle Neutral 2023",
+  "dentReviews",
+  "Precogvision",
+  "RikudouGoku",
+  "Super 21"
+ ],
+ "superreview-earbuds": [
+  "Apple EarPods"
+ ],
+ "superreview-headphones": [
+  "Harman 2015",
+  "Sennheiser HD 600"
+ ],
  "suporsalad": [
   "Harman IE 2019",
   "Diffuse Field",
@@ -1110,76 +1205,12 @@
   "Rtings",
   "Sonarworks"
  ],
- "superreview-earbuds": [
-  "Apple EarPods"
- ],
- "scboy": [
-  "SCB",
-  "Bad Guy",
-  "Crinacle",
-  "Crinacle 2023",
-  "Oratory1990",
-  "Harman IE2019v2",
-  "IE 2024 + BASS",
-  "Diffuse Field",
-  "5128 to 711"
- ],
- "samreviews": [
-  "Sam Reviews SR-IE 2025",
-  "Sam Reviews SR-IE Devastator",
-  "Harman IE 2019",
-  "IEF Neutral 2023",
-  "Super 22 Adjusted",
-  "Sam Reviews SR-IE Airline",
-  "Rtings",
-  "Diffuse Field",
-  "Crinacle",
-  "Bad Guy",
-  "Etymotic"
- ],
- "seanwee": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "soundcheck39": [
-  "Diffuse Field",
-  "Etymotic",
-  "Free Field",
-  "Innerfidelity ID",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle",
-  "Precogvision",
-  "Super Review",
-  "Harman",
-  "Rtings",
-  "Sonarworks"
- ],
- "smirk": [
-  "711 JM-1 10db",
-  "IEF Preference 2025 711",
-  "Crinacle",
-  "Harman"
- ],
  "suporsalad-headphones": [
   "Harman 2018",
   "KEMAR DF (KB50xx)"
  ],
- "superreview-headphones": [
-  "Harman 2015",
-  "Sennheiser HD 600"
+ "tanchjim": [
+  "Tanchjim"
  ],
  "tdl": [
   "Harman IE 2019",
@@ -1189,31 +1220,6 @@
  "tedthepraimortis": [
   "Generic Delta",
   "Generic JM-1"
- ],
- "tanchjim": [
-  "Tanchjim"
- ],
- "superreview": [
-  "Super 22",
-  "Crinacle 2023 Adjusted",
-  "Harman IE 2019",
-  "Crinacle Adjusted",
-  "Antdroid",
-  "Bad Guy",
-  "Banbeucmas",
-  "Crinacle Neutral",
-  "Crinacle Neutral 2023",
-  "dentReviews",
-  "Precogvision",
-  "RikudouGoku",
-  "Super 21"
- ],
- "sl0the": [
-  "Harman 2019v2",
-  "IEF Neutral 2020",
-  "IEF Neutral 2023",
-  "Crinacle 2023 Adjusted",
-  "Timmy"
  ],
  "tgx78": [
   "Diffuse Field",
@@ -1231,23 +1237,17 @@
   "Rtings",
   "Sonarworks"
  ],
- "sai": [
-  "Harman OE 2018 Linear",
-  "HiRes Harman 2018 OE (KB50XX)",
-  "Diffuse Field",
-  "unheardlab OE",
-  "unheardlab IEM",
-  "Harman OE 2018",
-  "Harman OE 2015",
-  "Harman OE 2013",
-  "Harman IE 2019 V2"
- ],
- "yanyin": [
+ "theaudiostore": [
   "Harman IE 2019",
+  "IEF Neutral 2023",
+  "Super 22 Adjusted"
+ ],
+ "tonedeafmonk": [
   "Diffuse Field",
   "Etymotic",
   "Free Field",
   "Innerfidelity ID",
+  "ToneDeafMonk",
   "Antdroid",
   "Bad Guy",
   "Banbeucmas",
@@ -1257,6 +1257,16 @@
   "Harman",
   "Rtings",
   "Sonarworks"
+ ],
+ "treblewellxtended": [
+  "Harman Adjusted",
+  "Diffuse Field",
+  "Etymotic",
+  "Bad Guy",
+  "Crinacle",
+  "Super Review",
+  "TWX Neutral",
+  "TWX Preference"
  ],
  "vortexreviews": [
   "Diffuse Field",
@@ -1285,12 +1295,19 @@
   "Super Review",
   "Harman 2019 In-Ear"
  ],
- "tonedeafmonk": [
+ "vsg-headphones": [
+  "VSG",
+  "Harman 2018",
+  "Harman 2013",
+  "Harman Combined",
+  "ISO + Harman"
+ ],
+ "yanyin": [
+  "Harman IE 2019",
   "Diffuse Field",
   "Etymotic",
   "Free Field",
   "Innerfidelity ID",
-  "ToneDeafMonk",
   "Antdroid",
   "Bad Guy",
   "Banbeucmas",
@@ -1300,23 +1317,6 @@
   "Harman",
   "Rtings",
   "Sonarworks"
- ],
- "vsg-headphones": [
-  "VSG",
-  "Harman 2018",
-  "Harman 2013",
-  "Harman Combined",
-  "ISO + Harman"
- ],
- "treblewellxtended": [
-  "Harman Adjusted",
-  "Diffuse Field",
-  "Etymotic",
-  "Bad Guy",
-  "Crinacle",
-  "Super Review",
-  "TWX Neutral",
-  "TWX Preference"
  ],
  "yoshiultra": [
   "Diffuse Field",

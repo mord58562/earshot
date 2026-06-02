@@ -35,11 +35,6 @@ the app does from a user's point of view.
         │                    into the engine's non-interleaved
         │                    AudioBufferList. Real-time-safe.
         ▼
-   AVAudioMixerNode       ← inserted because AVAudioSourceNode →
-        │                    AVAudioUnitVarispeed needs an explicit
-        │                    format-bridging mixer when the source
-        │                    is stereo Float32.
-        ▼
    AVAudioUnitVarispeed   ← drift-correction. rate = inScalar / outScalar
         │                    (each device's mRateScalar from CoreAudio).
         │                    Updated every 200 ms. Stays in the sub-ppm
@@ -188,11 +183,19 @@ distinct detection. `AppState.runWatchdogTick` runs once per second
 on the main runloop (added to `.common` so it fires while the SwiftUI
 popover is open) and looks at three signals:
 
-| failure mode                    | detection                                                                      | recovery                  |
-|--------------------------------|--------------------------------------------------------------------------------|---------------------------|
-| `AVAudioEngine.isRunning=false` | true for ≥ 2 s                                                                 | `handleConfigChange()`    |
-| post-EQ tap stops firing        | `lastTapAt` older than 3 s while `engine.isRunning`                            | `handleConfigChange()`    |
-| ring buffer empty               | `engine.ringBufferFillFrames == 0` for ≥ 5 s after the post-start settle window | `handleConfigChange()`    |
+| failure mode                       | detection                                                                | recovery                  |
+|------------------------------------|--------------------------------------------------------------------------|---------------------------|
+| `AVAudioEngine.isRunning=false`    | true for ≥ 2 s                                                           | `handleConfigChange()`    |
+| post-EQ tap stops firing           | `lastTapAt` older than 3 s while `engine.isRunning`                      | `handleConfigChange()`    |
+| input render proc silent           | `lastInputRenderAt` older than 5 s after the post-start settle window    | `handleConfigChange()`    |
+| system default drifted off loopback | system default not loopback device for ≥ 2 s                            | `handleSystemDefaultOutputChanged()` restores loopback as default |
+
+The watchdog used to also fire when `ringBufferFillFrames == 0` for a
+sustained window; that signal was removed because with balanced
+producer/consumer the ring legitimately oscillates around empty on
+healthy engines, producing false-positive recovery storms after long
+uptime. `lastInputRenderAt` (the authoritative "input AUHAL is firing"
+signal) replaced it.
 
 `handleConfigChange()` itself is gated: it ignores callbacks fired
 within 2.5 s of a successful start (the post-start settle that
@@ -202,13 +205,13 @@ inside a 60 s rolling window flips EQ off and surfaces an error
 rather than thrashing CoreAudio.
 
 A separate listener watches
-`kAudioHardwarePropertyDefaultOutputDevice`. When EQ is on, system
-default needs to stay on BlackHole; if a Bluetooth wake, USB
-sleep/wake, or another app's preference change moves it elsewhere,
-audio silently goes to the new default and BlackHole drains zeroes.
-The listener restores the default to BlackHole. There's a flap
-detector: 5+ restores in 10 s means something else keeps fighting
-us, and rather than escalating we tell the user.
+`kAudioHardwarePropertyDefaultOutputDevice`. When EQ is on, picking a
+different output via the macOS Sound menu / Control Center / Bluetooth
+wake is treated as the user's intent: Earshot disengages EQ and lets
+audio flow straight to the new device. Re-selecting the loopback as
+the system default re-engages EQ with the same routing it had before.
+This matches the principle that macOS native controls should keep
+working while Earshot is running.
 
 ## 6. Auto-preamp
 
@@ -309,26 +312,49 @@ fails with the offending line, rather than silently dropping bands.
 
 ## 9. Headphone catalog
 
-`HeadphoneIndex.swift` keeps a curated index of ~32 popular
-headphones bundled with the app, plus an on-demand refresh from the
-AutoEQ GitHub repository. The refresh path:
+`HeadphoneIndex.swift` plus `SquigFetcher.swift` and `HeadphoneLibrary`
+expose ~30,000 headphone measurements: ~6,000 from 23 AutoEQ measurers
+(oratory1990, Crinacle, Super* Review, Innerfidelity, Rtings,
+Kuulokenurkka, DHRME, HypetheSonics, Jaytiss, RikudouGoku, kr0mka,
+Bakkwatan, Filk, Harpo, ToneDeafMonk and others), and ~24,000 from
+144 live squig.link databases. Both snapshots ship bundled
+(`Resources/headphones.json` + `Resources/squig_catalog.json`); on
+first launch the union is unioned into the picker before any network
+call, and `Resources/squig_targets.json` (~1,100 target-name
+declarations across 112 sources) populates the form-factor-grouped
+target picker immediately.
 
-1. Fetch `api.github.com/.../results/oratory1990` for the list of
-   measurement-set subdirectories (`harman_over-ear_2018`, etc.).
-2. For each set, fetch its directory listing and emit a
-   `HeadphoneEntry` per subfolder, deriving the raw URL of the
-   `<name> ParametricEQ.txt` inside it.
-3. De-dupe by name; sort.
-4. Write the result to
-   `~/Library/Caches/Earshot/headphones.json`.
+The library is owned by a sibling `HeadphoneLibrary: ObservableObject`,
+not by `AppState`. This keeps `AppState.objectWillChange` from firing
+on every catalog refresh - the main popover never re-renders for a
+catalog event, only the Find-a-preset sheet (which observes the
+library directly) does.
 
-The cached list is stale after 7 days. The search sheet
-auto-refreshes once per session if the cache is stale.
+Network refresh path:
 
-`fetchPreset` downloads the `ParametricEQ.txt` for a single entry
-and runs it through `AutoEQFormat.decode`. The download is cached
-under `~/Library/Caches/Earshot/txt-<URL-derived key>.txt` so
-repeated imports of the same headphone don't hit the network.
+1. Walk each AutoEQ measurer's directory tree via the GitHub Contents
+   API, emit one `HeadphoneEntry` per `<name> ParametricEQ.txt`.
+2. In parallel, walk every database listed in `Resources/squigsites.json`
+   (the squig.link directory file): fetch each site's `phone_book.json`
+   for the model list and `config.js` for the target-curve declarations.
+   ~118 sites with 1-3 databases each = ~144 squig sources fanned out
+   with TaskGroup-managed concurrency.
+3. De-dupe across all sources by `(name, target, measurer)`; sort.
+4. Write the union to `~/Library/Caches/Earshot/headphones.json`.
+
+The cached list is stale after 7 days. The search sheet auto-refreshes
+once per session if the cache is stale. The bundled snapshot is built
+offline by `Tools/build_headphones_json.py` (AutoEQ side, via a
+treeless `git clone --filter=tree:0` of jaakkopasanen/AutoEq) and
+`Tools/build_squig_snapshot.py` (squig side, parallel HTTP fan-out).
+
+`fetchPreset` either downloads the published `ParametricEQ.txt` (for
+AutoEQ-mirrored entries) or fetches the raw frequency-response data
+plus the target curve and runs the on-device FR-to-PEQ fit
+(`FRToPEQ.fit` in `SquigFetcher.swift`, a Swift port of squig's own
+`equalizer.js`: two-batch greedy peak picking + per-axis coordinate
+descent). Downloaded `ParametricEQ.txt` is cached under
+`~/Library/Caches/Earshot/txt-<URL-derived key>.txt`.
 
 ## 10. Login-item lifecycle
 

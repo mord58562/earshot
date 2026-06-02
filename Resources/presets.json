@@ -5,7 +5,6 @@
       "id": "F8B7B6F0-0001-4000-A000-000000000001",
       "name": "Sennheiser HD 600",
       "preampDB": -9.3,
-      "outputDeviceUID": null,
       "bands": [
         {"type": "parametric", "frequency": 20,    "gain":  4.0, "q": 1.10, "bypass": false},
         {"type": "parametric", "frequency": 97,    "gain": -2.5, "q": 0.70, "bypass": false},
@@ -23,7 +22,6 @@
       "id": "F8B7B6F0-0001-4000-A000-000000000002",
       "name": "Beyerdynamic DT 700 Pro X",
       "preampDB": -4.4,
-      "outputDeviceUID": null,
       "bands": [
         {"type": "parametric", "frequency": 25,   "gain": -3.3, "q": 0.50, "bypass": false},
         {"type": "lowShelf",   "frequency": 105,  "gain":  5.5, "q": 0.71, "bypass": false},
