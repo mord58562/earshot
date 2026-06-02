@@ -254,9 +254,9 @@ The shipping algorithm is in `AppState.autoAdjustPreamp`. Core ideas:
 
 Two JSON files under `~/Library/Application Support/Earshot/`:
 
-- `presets.json` — the user's saved preset library, versioned via
+- `presets.json` - the user's saved preset library, versioned via
   `PresetFile.version` for future schema migrations.
-- `settings.json` — the working EQ, currently selected devices,
+- `settings.json` - the working EQ, currently selected devices,
   EQ on/off state, and which preset (if any) was last loaded.
 
 Writes are atomic (`Data.write(to:options:.atomic)`). Reads use

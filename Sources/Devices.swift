@@ -67,7 +67,7 @@ enum DeviceCatalog {
 
     /// Best-effort: attempt to set a device's nominal sample rate. Returns
     /// true if the device accepted the rate (or already had it). Many real
-    /// devices (Bluetooth, HDMI) refuse arbitrary rates — caller should not
+    /// devices (Bluetooth, HDMI) refuse arbitrary rates - caller should not
     /// treat failure as fatal.
     @discardableResult
     static func setNominalSampleRate(_ deviceID: AudioDeviceID, _ rate: Double) -> Bool {

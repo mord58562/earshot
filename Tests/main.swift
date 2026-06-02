@@ -1,6 +1,6 @@
 import Foundation
 
-// Tiny standalone test runner — compiled and executed directly via swift, not
+// Tiny standalone test runner - compiled and executed directly via swift, not
 // XCTest, so there's no project file to maintain. Run with `./Tests/run.sh`.
 
 var failures: [String] = []

@@ -30,12 +30,18 @@ struct OnboardingSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Welcome to Earshot")
-                .font(.system(size: 18, weight: .semibold))
+            Text(headerText)
+                .font(.system(size: 16, weight: .semibold))
             phaseSection
         }
         .padding(24)
         .frame(width: 420)
+    }
+
+    private var headerText: String {
+        if !loopbackPresent { return "Install a loopback driver." }
+        if micStatus != .authorized { return "Grant microphone access." }
+        return "Pick an output."
     }
 
     @ViewBuilder
@@ -53,8 +59,7 @@ struct OnboardingSheet: View {
 
     private var loopbackPane: some View {
         VStack(alignment: .leading, spacing: 12) {
-            label("No loopback driver found.")
-            Text("Earshot needs a 2-channel virtual loopback to capture system audio. BlackHole 2ch is the recommended free option - install with Homebrew or directly:")
+            Text("Earshot routes macOS audio through a 2-channel virtual loopback driver. BlackHole 2ch is the free option; VB-Cable, Soundflower (2ch), or Loopback Audio also work.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 6) {
@@ -67,9 +72,6 @@ struct OnboardingSheet: View {
                      destination: URL(string: "https://existential.audio/blackhole")!)
                     .font(.system(size: 12))
             }
-            Text("VB-Cable, Soundflower (2ch), or Loopback Audio also work if you already have one installed.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("Re-check") {
@@ -84,8 +86,7 @@ struct OnboardingSheet: View {
 
     private var micPane: some View {
         VStack(alignment: .leading, spacing: 12) {
-            label("One macOS permission to enable.")
-            Text("Virtual loopback drivers appear to macOS as microphones, so Earshot has to ask for Microphone access. It only reads from the loopback - no real microphone is ever opened.")
+            Text("macOS treats virtual loopbacks as microphones, so the system prompt asks for Microphone access. Earshot only reads from the loopback driver; no real microphone is opened.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             HStack {
@@ -113,10 +114,6 @@ struct OnboardingSheet: View {
 
     private var readyPane: some View {
         VStack(alignment: .leading, spacing: 12) {
-            label("Pick an output and you're set.")
-            Text("Choose where Earshot should send the EQ'd audio. You can change this any time from the popover.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
             Picker("", selection: Binding(
                 get: { state.outputDeviceUID ?? "" },
                 set: { state.setOutputDevice(uid: $0) })) {
@@ -131,19 +128,13 @@ struct OnboardingSheet: View {
             .pickerStyle(.menu)
             HStack {
                 Spacer()
-                Button("Done") {
+                Button("Start using Earshot") {
                     UserDefaults.standard.set(true, forKey: "earshot.onboardingComplete")
                     onClose()
                 }
                 .keyboardShortcut(.defaultAction)
             }
         }
-    }
-
-    @ViewBuilder
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: .semibold))
     }
 }
 
@@ -183,7 +174,7 @@ enum Onboarding {
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false)
-        w.title = "Welcome to Earshot"
+        w.title = "Earshot setup"
         w.contentViewController = host
         w.isReleasedWhenClosed = false
         w.center()

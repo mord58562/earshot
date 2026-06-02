@@ -315,7 +315,7 @@ private struct HeaderBar: View {
                 .layoutPriority(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .help("Output device - where Earshot sends the EQ'd audio")
+            .help("Output device")
 
             if state.isApplyingRouting {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
@@ -351,57 +351,11 @@ private struct HeaderBar: View {
                     get: { state.eqEnabled || state.bypassMode },
                     set: { state.setEQEnabled($0) }),
                 tint: Color.accentColor)
-            .help(state.eqEnabled || state.bypassMode ? "On (turn off to fully disable Earshot)" : "Off (Earshot is not intercepting audio)")
+            .help(state.eqEnabled || state.bypassMode ? "On" : "Off")
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 10)
-    }
-}
-
-// MARK: - How it works
-
-private struct HowItWorksHint: View {
-    var body: some View {
-        Grid(alignment: .leadingFirstTextBaseline,
-             horizontalSpacing: 10,
-             verticalSpacing: 4) {
-            GridRow {
-                HintLabel("EQ on")
-                Text("Captures all system audio, applies the EQ, plays through the output below.")
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            GridRow {
-                HintLabel("EQ off")
-                Text("Audio plays via your macOS sound settings as normal.")
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            GridRow {
-                HintLabel("Bypass")
-                Text("The speaker button next to the on/off switch routes audio to built-in speakers with no EQ.")
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .font(.system(size: 10))
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 2)
-    }
-}
-
-private struct HintLabel: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9, weight: .semibold))
-            .textCase(.uppercase)
-            .tracking(0.5)
-            .foregroundStyle(.primary.opacity(0.75))
-            .frame(width: 42, alignment: .leading)
     }
 }
 
@@ -1015,7 +969,7 @@ private struct ToolbarRow: View {
         panel.message = "Select a ParametricEQ.txt file (AutoEQ format)."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            importErrorMessage = "Couldn't read the file."
+            importErrorMessage = "Couldn't read \(url.lastPathComponent) as UTF-8 text."
             return
         }
         let defaultName = url.deletingPathExtension().lastPathComponent

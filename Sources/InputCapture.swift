@@ -10,7 +10,7 @@ import AudioUnit
 ///
 /// Why a raw AUHAL instead of using AVAudioEngine.inputNode: on macOS,
 /// AVAudioEngine.inputNode and outputNode share a single audio unit
-/// whose CurrentDevice can only point to one device — so we cannot
+/// whose CurrentDevice can only point to one device - so we cannot
 /// have an AVAudioEngine that takes input from BlackHole and writes
 /// output to a different USB DAC. Using a raw input AUHAL alongside a
 /// separate AVAudioEngine for output is Apple's own pattern (see the
@@ -188,7 +188,7 @@ final class InputCapture {
         // Pre-allocate the AudioBufferList we'll hand to AudioUnitRender.
         // For interleaved stereo we use a single buffer with 2 channels.
         // Capacity must be at least the largest IO buffer the device may
-        // request — query it; default to 4096 frames if unavailable.
+        // request - query it; default to 4096 frames if unavailable.
         var bufferFrames: UInt32 = 4096
         var sizeBufferFrames = UInt32(MemoryLayout<UInt32>.size)
         AudioUnitGetProperty(unit, kAudioDevicePropertyBufferFrameSize,

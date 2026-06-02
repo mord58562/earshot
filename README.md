@@ -124,8 +124,8 @@ and every sound your Mac plays runs through the EQ on its way out.
   device from the raw frequency-response data.
 - **Drag-and-drop import** - drag any ParametricEQ.txt onto the popover
   and it loads immediately as the working EQ.
-- **Tahoe-styled UI** - frosted-glass popover, continuous-corner card
-  surfaces, custom logo and app icon generated programmatically at build.
+- **Native macOS popover** - frosted-glass surface, continuous-corner
+  cards, custom logo and app icon generated programmatically at build.
 
 ## Requirements
 

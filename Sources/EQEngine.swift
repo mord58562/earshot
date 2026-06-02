@@ -16,7 +16,7 @@ import CoreAudio
 ///     [AVAudioEngine]   outputNode bound DIRECTLY to user's output device
 ///         AVAudioSourceNode → mixer → AVAudioUnitVarispeed → AVAudioUnitEQ → outputNode
 ///         • Varispeed rate continuously updated from
-///           inputDevice.mRateScalar / outputDevice.mRateScalar — this
+///           inputDevice.mRateScalar / outputDevice.mRateScalar - this
 ///           is Apple's CAPlayThrough drift-correction approach.
 ///                   ↓ channel-mapped to user device's L/R
 ///     [Output device]
@@ -25,7 +25,7 @@ import CoreAudio
 /// --------------
 /// The two devices stay on independent clocks. Drift reconciliation
 /// happens inside this engine via AVAudioUnitVarispeed, with the rate
-/// updated continuously from each device's mRateScalar — the same
+/// updated continuously from each device's mRateScalar - the same
 /// signal Apple's own CAPlayThrough sample uses. No aggregate device,
 /// so coreaudiod doesn't try to reconcile the two sub-device clocks
 /// itself; that path turned out to accumulate phase error and is what
@@ -34,7 +34,7 @@ import CoreAudio
 /// Real-time safety
 /// ----------------
 /// The AVAudioSourceNode render block runs on the output audio thread.
-/// It calls only into AudioRingBuffer.consume — which inlines into a
+/// It calls only into AudioRingBuffer.consume - which inlines into a
 /// memcpy + atomic load (TPCircularBuffer). No Swift method dispatch,
 /// no allocation, no locks. The InputCapture render proc on the input
 /// audio thread is similarly tight.
@@ -75,7 +75,7 @@ final class EQEngine: @unchecked Sendable {
         return t.sampleTime
     }
 
-    /// Number of frames currently in the ring buffer. Diagnostic only —
+    /// Number of frames currently in the ring buffer. Diagnostic only -
     /// sampling fill once per second is not a reliable stall signal
     /// because with balanced producer/consumer the ring oscillates
     /// between near-empty and one-quantum-full and the sample can
@@ -153,7 +153,7 @@ final class EQEngine: @unchecked Sendable {
             configChangeObserver = nil
         }
         // Stop input first (no more producer); drain by stopping engine
-        // immediately after — anything left in the ring buffer would just
+        // immediately after - anything left in the ring buffer would just
         // tail off into silence. inputCapture?.stop() goes through
         // AudioOutputUnitStop/AudioUnitUninitialize/AudioComponentInstanceDispose,
         // all of which can block on coreaudiod IPC.
@@ -213,7 +213,7 @@ final class EQEngine: @unchecked Sendable {
     /// Returns the UID of the loopback input Earshot should capture from.
     /// Prefers known 2-channel drivers; falls back to any 2-channel device
     /// whose name matches a loopback hint. Multichannel BlackHole (16ch /
-    /// 64ch) is intentionally skipped — the capture pipeline is stereo.
+    /// 64ch) is intentionally skipped - the capture pipeline is stereo.
     static func findLoopbackInputUID() -> String? {
         for name in preferredLoopbackNames {
             if let dev = DeviceCatalog.device(named: name),
@@ -308,14 +308,14 @@ final class EQEngine: @unchecked Sendable {
         // macOS, AVAudioEngine.inputNode and outputNode share one audio
         // unit; we don't use inputNode at all (our input comes via the
         // separate AUHAL above), so binding the unit to the output
-        // device is correct — the engine drives its IO loop from this
+        // device is correct - the engine drives its IO loop from this
         // device's hardware clock.
         try setDevice(outDev.id, on: engine.outputNode.audioUnit)
         self.outputDeviceID = outDev.id
 
         // Allocate the chain.
         // Capture the C ring-buffer pointer here so the render block
-        // doesn't need to retain the Swift wrapper — the wrapper's
+        // doesn't need to retain the Swift wrapper - the wrapper's
         // lifetime is bounded by the engine's lifetime, and the C
         // pointer stays stable until our `stop()` runs.
         let ringPtr = ring.rawPointer
@@ -326,7 +326,7 @@ final class EQEngine: @unchecked Sendable {
             // functions that compile down to a load + atomic op.
             let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
             // standardFormatWithSampleRate(channels: 2) on macOS gives
-            // non-interleaved Float32 — two single-channel buffers in
+            // non-interleaved Float32 - two single-channel buffers in
             // the AudioBufferList. The ring buffer stores INTERLEAVED
             // stereo; deinterleave during the copy.
             let buf0 = abl[0].mData!.assumingMemoryBound(to: Float32.self)
@@ -374,7 +374,7 @@ final class EQEngine: @unchecked Sendable {
         self.eq = eq
 
         // Output channel map: send our stereo into the user's output
-        // device's L/R channels (typically channels 0,1 — but multi-
+        // device's L/R channels (typically channels 0,1 - but multi-
         // channel devices like an HDMI receiver want us mapped to a
         // specific pair).
         let outChannels = Self.deviceChannelCount(outDev.id, scope: kAudioObjectPropertyScopeOutput)

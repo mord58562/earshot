@@ -226,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 MainActor.assumeIsolated {
     // Single-instance discipline, latest-launch-wins. If another Earshot
     // is already running we ask it to quit, force-kill stragglers, then
-    // proceed. The alternative — exiting on collision — traps the user
+    // proceed. The alternative - exiting on collision - traps the user
     // when a stale or crashed instance still owns the menubar icon: it
     // eats clicks, and a new launch from Finder or Launchpad would
     // silently bail.
