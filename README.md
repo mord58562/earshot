@@ -45,9 +45,9 @@ and every sound your Mac plays runs through the EQ on its way out.
 - **Reorder saved presets.** Drag a preset row by its grip handle to
   reorder. A live insert-line shows where the dropped row will land.
 - **Unified dB sign convention.** Every dB readout (band gain, preamp,
-  preset subtitle, hover tooltip) follows the FabFilter / Logic / Pro
-  Tools convention: explicit + on positive, - on negative, no sign on
-  exact zero. The ParametricEQ.txt exporter intentionally keeps the
+  preset subtitle, hover tooltip) follows the convention used across
+  most parametric EQs: explicit + on positive, - on negative, no sign
+  on exact zero. The ParametricEQ.txt exporter intentionally keeps the
   AutoEQ interchange convention (no leading +) so importers stay happy.
 - **Output-device crash hardening.** Rapid output-picker selections
   used to queue overlapping CoreAudio teardowns and could wedge the
@@ -324,8 +324,14 @@ MIT - see [LICENSE](LICENSE).
 - **oratory1990** headphone measurements, published as part of AutoEQ
   under CC BY-NC-SA 4.0. Source: https://www.reddit.com/r/oratory1990/.
 - **Crinacle** headphone measurements (in-ear and over-ear), accessed
-  through AutoEQ's mirror. Originals at https://crinacle.com/. Used as
+  through AutoEQ's mirror and through hangout.audio for the current
+  5128 / JM-1 set. Originals at https://crinacle.com/. Used as
   reference points; Earshot bundles only URLs to the measurement files.
+- **squig.link / CrinGraph** by Jude Lau and contributors
+  (https://github.com/squiglink/lab) - Earshot's headphone-catalog
+  expansion uses the squig.link directory of databases, and the
+  on-device frequency-response to PEQ fit is a Swift port of squig's
+  own `equalizer.js`. Site code and algorithm port both 0BSD.
 - **TPCircularBuffer** by Michael Tyson / A Tasty Pixel
   (https://github.com/michaeltyson/TPCircularBuffer) - the lock-free SPSC
   ring buffer that hands audio frames from the input AUHAL to the output

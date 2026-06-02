@@ -15,7 +15,7 @@ doesn't have to be researched again.
 | System-audio-capture entitlement (the path djay / Serato use) | Private Apple-negotiated entitlement. Not requestable through the developer portal, full stop. |
 | Programmatic `Settings > Music > EQ` preset | No public API. iOS 26 added nothing here. |
 | Apple Music app hosting AUv3 | Apple Music does not host AUv3. AUM / GarageBand / Logic for iPad do, but the user has to listen inside the host - which isn't Apple Music. |
-| Jailbreak / private entitlements / sideload exploits | Off the table per Rob's Tier-1 detection-risk frame. |
+| Jailbreak / private entitlements / sideload exploits | Out of scope - free-developer-account project. |
 
 ## The one realistic approximation: HealthKit audiogram bridge
 

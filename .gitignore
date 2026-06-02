@@ -9,6 +9,10 @@ Resources/AppIcon.icns
 Resources/AppIcon.iconset/
 # Personal-context drafts that shouldn't ship in the public repo.
 REDDIT_POST.md
+# Session checkpoints + audit-findings notes (working state).
+.*-checkpoint.md
+.audit-findings-*.md
+.audit-plan.md
 
 # Python bytecode from running linux/earshot-linux locally.
 __pycache__/
