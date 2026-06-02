@@ -16,6 +16,46 @@ and every sound your Mac plays runs through the EQ on its way out.
 | ![Auto preamp tracking](docs/screenshots/04-preamp-meter-active.png) | ![Speaker output](docs/screenshots/05-speaker-output.png) |
 | Auto-preamp tracking live levels. | Routing to MacBook speakers instead of headphones. |
 
+## What's new in 1.5.0
+
+- **Bundled cold start.** The full ~30 K-entry library (6 K AutoEQ +
+  24 K squig-direct) and the full 242-target picker now ship in the
+  bundle. First-run users see everything immediately - no network
+  round-trip required to populate the picker. Refresh remains
+  available for fresh upstream pulls.
+- **Find-a-preset sectioned dropdown.** The target picker collapses
+  into two compact menu pills (Over-ear / In-ear), each sectioned by
+  family (Reference: Harman / IEF / JM-1 / Diffuse Field / Free
+  Field; Reviewer-tuned: Antdroid / MRS / HBB / Bad Guy / Crinacle
+  2023 / Super 2022 / RikudouGoku / Banbeucmas / Precogvision / Nymz
+  and the rest). The earlier horizontal pill scroll didn't survive
+  the 240-target catalog.
+- **Audit fix wave.** Five parallel code-review agents found ~80
+  issues spanning audio engine lifecycle, catalog correctness, public-
+  release safety, and UI hygiene. The user-visible wins:
+  - AutoEQ import now accepts `Gain +5.5 dB` (EqualizerAPO syntax) -
+    previously silently parsed as gain 0.
+  - Live squig refresh no longer 404s on filenames with spaces
+    (URL-encoding round-trip bug).
+  - L/R averaging keys on integer millihertz instead of float exact
+    equality - earlier divergence by a sub-ppm epsilon silently fell
+    back to L-only fits.
+  - One malformed catalog row no longer wipes the 24 K library;
+    parse is now entry-by-entry.
+  - InputCapture stop nulls the render callback and inserts a 20 ms
+    drain window before disposing the AU - closes the use-after-free
+    that occasionally crashed on rapid output-picker storms.
+  - BlackHole sample-rate pin failure now falls back to BlackHole's
+    actual nominal rate instead of letting audio play at the wrong
+    speed indefinitely.
+  - PEQ fit threshold tightened from 0.5 dB to 0.1 dB and the
+    coordinate descent now runs to per-step convergence, matching
+    squig's `equalizer.js` more closely.
+- **Polish.** Onboarding copy rewritten; em-dash sweep across the
+  source + docs; dead UI code removed; ARCHITECTURE.md realigned
+  with what the code actually does (mixer is gone, catalog is 30 K
+  not 32, watchdog table reflects the live signals).
+
 ## What's new in 1.4.0
 
 - **Squig.link integration.** The preset library now spans 23 AutoEQ
