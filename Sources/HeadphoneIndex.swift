@@ -167,12 +167,33 @@ struct HeadphoneEntry: Codable, Identifiable, Hashable {
 
     /// Infer the target curve AutoEQ tuned this PEQ against. AutoEQ
     /// folder names encode rig, not target; the target is convention
-    /// per (measurer, rig). Mirror of `target_from(measurer, set_name)`
-    /// in Tools/build_headphones_json.py so the runtime backfill and
-    /// the bundled snapshot agree.
+    /// per (measurer, rig). Kept in sync with `target_from()` in
+    /// `Tools/build_headphones_json.py` and `Tools/build_squig_snapshot.py`
+    /// so bundled snapshots and runtime backfill produce identical
+    /// labels (no Harman 2015 OE / Harman 2019 IE v2 mismatches).
     private static func targetFromSet(_ set: String, measurer: String) -> String? {
         let s = set.lowercased()
         let m = measurer.lowercased()
+        // Most specific first - the harman variant names overlap on
+        // shorter substrings (e.g. "harman_in-ear_2019_v2" contains
+        // "harman 2019" too, and would mislabel if we caught that first).
+        if s.contains("harman_in-ear_2019_v2") || s.contains("harman 2019 v2") {
+            return "Harman 2019 IE v2"
+        }
+        if s.contains("harman_in-ear_2019") || s.contains("harman 2019") {
+            return "Harman 2019 IE"
+        }
+        if s.contains("harman_in-ear_2017") || s.contains("harman 2017 ie") {
+            return "Harman 2017 IE"
+        }
+        if s.contains("harman_over-ear_2018") || s.contains("harman 2018") {
+            return "Harman 2018 OE"
+        }
+        if s.contains("harman_over-ear_2015") || s.contains("harman 2015") {
+            return "Harman 2015 OE"
+        }
+        if s.contains("autoeq_in-ear") { return "AutoEQ IE" }
+        if s.contains("autoeq_over-ear") { return "AutoEQ OE" }
         if s.contains("5128") {
             if s.contains("in-ear") || s.contains("iem") {
                 return m.contains("crinacle") ? "JM-1" : "IEF Neutral"
@@ -182,6 +203,12 @@ struct HeadphoneEntry: Codable, Identifiable, Hashable {
         }
         if s.contains("ief") { return "IEF Neutral" }
         if s.contains("jm-1") || s.contains("jm1") { return "JM-1" }
+        if s.contains("diffuse field") || s.contains("diffuse_field") {
+            return "Diffuse Field"
+        }
+        if s.contains("free field") || s.contains("free_field") {
+            return "Free Field"
+        }
         if s.contains("711") || s.contains("in-ear") { return "Harman 2019 IE" }
         if s.contains("over-ear") || s.contains("gras")
             || s.contains("kemar") || s.contains("hms") || s.contains("ears") {
@@ -414,13 +441,51 @@ enum HeadphoneIndex {
     private static func loadBundled() -> [HeadphoneEntry]? {
         guard let url = Bundle.main.url(forResource: bundledFile, withExtension: "json"),
               let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode([HeadphoneEntry].self, from: data)
+        return decodeEntriesFailSoft(data, sourceLabel: "bundled headphones.json")
     }
 
     private static func loadCached() -> [HeadphoneEntry]? {
         let f = cacheDir.appendingPathComponent("headphones.json")
         guard let data = try? Data(contentsOf: f) else { return nil }
-        return try? JSONDecoder().decode([HeadphoneEntry].self, from: data)
+        return decodeEntriesFailSoft(data, sourceLabel: "cached headphones.json")
+    }
+
+    /// Decode an entry array entry-by-entry. One malformed row used to
+    /// take down the whole 24 K-entry library because `decode([T].self)`
+    /// is all-or-nothing. Now we keep the survivors and log the count.
+    private static func decodeEntriesFailSoft(_ data: Data, sourceLabel: String) -> [HeadphoneEntry] {
+        // Strategy: decode as [JSONValue], then re-encode each element
+        // individually and try to decode as HeadphoneEntry. Lossy when
+        // an entry is shaped wrong (unknown filter codes, missing name)
+        // - which is exactly the point.
+        guard let raw = try? JSONSerialization.jsonObject(with: data) as? [Any] else {
+            Log.write("\(sourceLabel): top-level JSON not an array")
+            return []
+        }
+        var entries: [HeadphoneEntry] = []
+        var skipped = 0
+        let decoder = JSONDecoder()
+        for item in raw {
+            guard let dict = item as? [String: Any] else { skipped += 1; continue }
+            // Skip rows with empty/missing name early - the bundled
+            // snapshot has at least one (an empty model name where the
+            // brand and model concatenated to "").
+            let nameRaw = dict["name"] as? String
+            if nameRaw == nil || nameRaw!.trimmingCharacters(in: .whitespaces).isEmpty {
+                skipped += 1
+                continue
+            }
+            guard let body = try? JSONSerialization.data(withJSONObject: dict),
+                  let entry = try? decoder.decode(HeadphoneEntry.self, from: body) else {
+                skipped += 1
+                continue
+            }
+            entries.append(entry)
+        }
+        if skipped > 0 {
+            Log.write("\(sourceLabel): decoded \(entries.count) entries, skipped \(skipped) malformed")
+        }
+        return entries
     }
 
     static func saveCache(_ entries: [HeadphoneEntry]) {

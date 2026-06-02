@@ -77,7 +77,10 @@ enum AutoEQFormat {
     private static let filterRegex: NSRegularExpression? = {
         // "Filter <n>: ON <CODE> Fc <freq> Hz Gain <gain> dB Q <q>"
         // Some exporters omit Gain or Q for non-applicable filter types.
-        let pattern = #"Filter\s+\d+\s*:\s*(ON|OFF)\s+([A-Z]+)\s+Fc\s+([\d.]+)\s*Hz(?:\s+Gain\s+(-?[\d.]+)\s*dB)?(?:\s+Q\s+([\d.]+))?"#
+        // Gain accepts an explicit `+` sign - EqualizerAPO writes
+        // "Gain +5.5 dB" and the old `-?` form silently matched the
+        // line but dropped the numeric to nil, parsing as gain 0.
+        let pattern = #"Filter\s+\d+\s*:\s*(ON|OFF)\s+([A-Z]+)\s+Fc\s+([\d.]+)\s*Hz(?:\s+Gain\s+([+-]?[\d.]+)\s*dB)?(?:\s+Q\s+([\d.]+))?"#
         return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }()
 
@@ -115,7 +118,14 @@ enum AutoEQFormat {
         case "RHP": return .resonantHighPass
         case "RLS": return .resonantLowShelf
         case "RHS": return .resonantHighShelf
-        default: return nil
+        default:
+            // EqualizerAPO emits AP (all-pass), INV (invert phase) and
+            // other custom codes Earshot doesn't model. Log the drop so
+            // the user can tell at a glance from the file Earshot
+            // didn't render every filter (instead of failing the whole
+            // import on one stray line).
+            Log.write("AutoEQ import: skipping unsupported filter code '\(code)'")
+            return nil
         }
     }
 

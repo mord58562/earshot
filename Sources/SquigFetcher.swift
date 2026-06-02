@@ -310,9 +310,15 @@ extension SquigFetcher {
               base.host == source.dataBase.host else {
             throw URLError(.badURL)
         }
-        // Fetch L + R, average linearly, then subtract target.
-        let leftURL = URL(string: base.absoluteString + " L.txt")!
-        let rightURL = URL(string: base.absoluteString + " R.txt")!
+        // Build L / R / Target URLs via `appendingPathComponent`, which
+        // handles percent-encoding correctly. The previous shape
+        // (`URL(string: base.absoluteString + " L.txt")`) re-encoded
+        // already-encoded space bytes - %20 became %2520 on re-parse -
+        // and every live-refresh fetchPreset 404'd silently.
+        let baseLast = base.lastPathComponent
+        let parent = base.deletingLastPathComponent()
+        let leftURL = parent.appendingPathComponent("\(baseLast) L.txt")
+        let rightURL = parent.appendingPathComponent("\(baseLast) R.txt")
         async let l = fetchTSV(leftURL)
         async let r = fetchTSV(rightURL)
         let left = try await l
@@ -350,13 +356,19 @@ extension SquigFetcher {
     }
 
     static func parseTSV(_ text: String) -> [FRPoint] {
+        // Strip a leading UTF-8 BOM; some squig mirrors serve it on
+        // the first line, which would otherwise make the first data
+        // row's frequency Float-parse fail and silently drop the sample.
+        let stripped = text.hasPrefix("\u{FEFF}")
+            ? String(text.dropFirst())
+            : text
         var out: [FRPoint] = []
-        for line in text.split(whereSeparator: { $0.isNewline }) {
+        for line in stripped.split(whereSeparator: { $0.isNewline }) {
             let parts = line.split(separator: "\t", omittingEmptySubsequences: true)
             guard parts.count >= 2,
                   let f = Float(parts[0].trimmingCharacters(in: .whitespaces)),
                   let db = Float(parts[1].trimmingCharacters(in: .whitespaces)),
-                  f > 0 else { continue }
+                  f > 0, f.isFinite, db.isFinite else { continue }
             out.append(FRPoint(freq: f, db: db))
         }
         return out
@@ -365,10 +377,21 @@ extension SquigFetcher {
     private static func averageLinear(_ a: [FRPoint], _ b: [FRPoint]) -> [FRPoint] {
         // Squig averages in linear amplitude, not dB. Match that so the
         // PEQ stays portable between Earshot and the source site.
-        var index: [Float: Float] = [:]
-        for pt in b { index[pt.freq] = pt.db }
+        //
+        // Previous implementation keyed a `[Float: Float]` dict on the
+        // left file's frequencies and looked up the right file's by
+        // exact float equality. Squig sites sometimes export L and R at
+        // logically-identical Hz that diverge by a sub-ppm float epsilon
+        // (different rounding through the resampler), which silently
+        // dropped the lookup and made the average fall back to L only.
+        // Quantising the key to integer millihertz removes the epsilon
+        // problem while staying comfortably within REW's grid precision
+        // (48 PPO from 20 Hz to 20 kHz needs at most 10 mHz resolution).
+        var index: [Int: Float] = [:]
+        for pt in b { index[Int((pt.freq * 1000).rounded())] = pt.db }
         return a.map { pt in
-            guard let bDB = index[pt.freq] else { return pt }
+            let key = Int((pt.freq * 1000).rounded())
+            guard let bDB = index[key] else { return pt }
             let aLin = powf(10, pt.db / 20)
             let bLin = powf(10, bDB / 20)
             let avg = (aLin + bLin) / 2
