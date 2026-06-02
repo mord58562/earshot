@@ -38,7 +38,6 @@ do {
         id: UUID(),
         name: "Round-trip",
         preampDB: -6.5,
-        outputDeviceUID: nil,
         bands: [
             EQBand(type: .parametric, frequency: 105, gain: 5.5, q: 0.71),
             EQBand(type: .lowShelf, frequency: 105, gain: 5.5, q: 0.71),
@@ -92,7 +91,8 @@ do {
         eqEnabled: true,
         workingPreamp: 1.5,
         workingBands: [EQBand(type: .parametric, frequency: 1000, gain: 2, q: 1.0)],
-        loadedPresetID: UUID())
+        loadedPresetID: UUID(),
+        autoPreampEnabled: false)
     let data = try JSONEncoder().encode(original)
     let parsed = try JSONDecoder().decode(AppSettings.self, from: data)
     check(parsed.inputDeviceUID, original.inputDeviceUID, "settings input uid")
