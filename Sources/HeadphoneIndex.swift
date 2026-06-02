@@ -239,9 +239,29 @@ enum HeadphoneIndex {
     private static let cacheStaleAfter: TimeInterval = 7 * 24 * 60 * 60   // 7 days
 
     static func load() -> [HeadphoneEntry] {
+        // Cache wins when it exists - the network refresh has the
+        // freshest data. On first launch (no cache) we union the
+        // AutoEQ snapshot with the squig.link snapshot so the catalog
+        // and target picker start fully populated instead of waiting
+        // on the user to trigger a refresh.
         if let cached = loadCached() { return cached }
-        if let bundled = loadBundled() { return bundled }
-        return []
+        let auto = loadBundled() ?? []
+        let squig = loadBundledSquig() ?? []
+        if auto.isEmpty && squig.isEmpty { return [] }
+        // Squig entries first so the (name, target, measurer) key in
+        // any downstream de-dupe falls through to AutoEQ on collision
+        // (AutoEQ data has more complete metadata for cases both cover).
+        return squig + auto
+    }
+
+    /// Bundled squig.link snapshot baked by Tools/build_squig_snapshot.py.
+    /// Without this, the squig sources only appear after a network
+    /// refresh; with it, cold start sees ~24 K squig entries plus the
+    /// ~6 K AutoEQ ones immediately.
+    private static func loadBundledSquig() -> [HeadphoneEntry]? {
+        guard let url = Bundle.main.url(forResource: "squig_catalog", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode([HeadphoneEntry].self, from: data)
     }
 
     /// True if the cache is missing or older than 7 days. Used by the

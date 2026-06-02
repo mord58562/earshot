@@ -171,13 +171,19 @@ private func defaultTargetForDbType(_ type: String, source: String) -> String {
 // catalog/PEQ machinery without reflowing 200+ lines of code.
 extension SquigFetcher {
 
-    /// Targets each squig source advertises in its `config.js`. Populated
-    /// at refresh time by `fetchTargetsConfig`. The search sheet unions
-    /// these into the target-curve picker so every reviewer-specific
-    /// target (Antdroid, MRS, RikudouGoku, Bad Guy 2022, Crinacle 2023,
-    /// Super Review, Precogvision, Etymotic, ...) shows up - not just
-    /// the source's default.
-    @MainActor static var supportedTargetsBySource: [String: [String]] = [:]
+    /// Targets each squig source advertises in its `config.js`. Seeded
+    /// at first access from the bundled squig_targets.json snapshot so
+    /// cold start has the full picker; the network refresh later
+    /// replaces entries with anything that's changed upstream.
+    @MainActor static var supportedTargetsBySource: [String: [String]] = loadBundledTargets()
+
+    private static func loadBundledTargets() -> [String: [String]] {
+        guard let url = Bundle.main.url(forResource: "squig_targets", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let dict = try? JSONDecoder().decode([String: [String]].self, from: data)
+        else { return [:] }
+        return dict
+    }
 
     /// Did the user's specific-target filter line up with a source the
     /// catalog entry belongs to. Used by the search sheet so picking
