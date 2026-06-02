@@ -72,7 +72,25 @@ final class InputCapture {
 
     func stop() {
         if let u = unit {
+            // Null the input callback BEFORE AudioOutputUnitStop. Any
+            // render in flight finishes against still-valid pointers,
+            // but no new callback can be scheduled that would re-enter
+            // capture state after we tear down inputBufferList. Without
+            // this, AudioOutputUnitStop could return while a callback
+            // is still mid-flight, and freeing inputBufferList below
+            // pulls the rug out from under it (use-after-free).
+            var nullCallback = AURenderCallbackStruct(inputProc: nil, inputProcRefCon: nil)
+            _ = AudioUnitSetProperty(u, kAudioOutputUnitProperty_SetInputCallback,
+                                     kAudioUnitScope_Global, 0,
+                                     &nullCallback,
+                                     UInt32(MemoryLayout<AURenderCallbackStruct>.size))
             AudioOutputUnitStop(u)
+            // Drain window. AudioUnitUninitialize is documented to wait
+            // for in-flight renders, but historically that hasn't been
+            // reliable across macOS releases. 20 ms is 2-3 IO cycles at
+            // typical buffer sizes - enough for the last callback to
+            // exit cleanly.
+            usleep(20_000)
             AudioUnitUninitialize(u)
             AudioComponentInstanceDispose(u)
         }

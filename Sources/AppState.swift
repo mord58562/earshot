@@ -1242,10 +1242,28 @@ final class AppState: ObservableObject {
             guard self.currentRoutingWatchdogID == watchdogID else { return }
             guard self.isApplyingRouting else { return }
             Log.write("routing watchdog: still applying after 5s; forcing UI back without changing saved output")
-            self.isApplyingRouting = false
-            self.currentRoutingWatchdogID = nil
             self.lastError = "Audio engine didn't start in time. Try toggling EQ off and on, or relaunch Earshot."
-            self.eqEnabled = false
+            // Tear down on the routing queue so we serialize behind any
+            // in-flight setRouting work. Without this, the prior code
+            // flipped eqEnabled = false while the queued setRouting
+            // closure kept running to completion, leaving the engine
+            // RUNNING with EQ flag off and BlackHole still pinned as
+            // system default - a zombie state that no UI control
+            // recovers from cleanly.
+            let engine = self.engine
+            self.routingQueue.async { [weak self] in
+                engine.stop()
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self = self else { return }
+                        self.isApplyingRouting = false
+                        self.currentRoutingWatchdogID = nil
+                        self.eqEnabled = false
+                        self.restoreSystemOutputIfHijacked()
+                        self.persist()
+                    }
+                }
+            }
         }
 
         let engine = self.engine

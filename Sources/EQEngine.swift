@@ -163,15 +163,20 @@ final class EQEngine: @unchecked Sendable {
             Log.write("EQEngine.stop: inputCapture done (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
         }
         inputCapture = nil
-        if let eq = eq {
-            Log.write("EQEngine.stop: eq.removeTap")
-            eq.removeTap(onBus: 0)
-        }
-        usleep(15_000)
+        // Stop the AVAudioEngine BEFORE removing the tap. Current Apple
+        // guidance (WWDC 2024) is engine.stop -> removeTap; removing
+        // the tap on a running engine can block waiting for the render
+        // thread to release the tap's buffer. The 15 ms usleep that
+        // used to sit between removeTap and stop was a band-aid for
+        // the old (reversed) order.
         if let e = engine, e.isRunning {
             Log.write("EQEngine.stop: AVAudioEngine.stop()")
             e.stop()
             Log.write("EQEngine.stop: AVAudioEngine.stop done (+\(String(format: "%.3f", CACurrentMediaTime() - t0))s)")
+        }
+        if let eq = eq {
+            Log.write("EQEngine.stop: eq.removeTap")
+            eq.removeTap(onBus: 0)
         }
         if engine != nil {
             Log.write("EQEngine.stop: AVAudioEngine.reset")
@@ -249,9 +254,22 @@ final class EQEngine: @unchecked Sendable {
         let outSR = Self.nominalSampleRate(of: outDev.id)
         let pinOK = DeviceCatalog.setNominalSampleRate(inDev.id, outSR)
         Log.write("pinned BlackHole to \(outSR) Hz to match \(outDev.name): \(pinOK ? "ok" : "refused")")
+        // If BlackHole refused the pin (e.g. the user fixed its rate
+        // in Audio MIDI Setup), build the format against BlackHole's
+        // actual nominal rate. Varispeed will absorb the resulting
+        // ratio; the alternative is letting BlackHole deliver at its
+        // rate but the AUHAL stream-format setter convert to outSR,
+        // which makes mRateScalar drift exceed varispeed's clamp band
+        // and audio plays at the wrong speed indefinitely.
+        let effectiveSR: Double = {
+            if pinOK { return outSR }
+            let actual = Self.nominalSampleRate(of: inDev.id)
+            Log.write("BlackHole refused pin; using its actual rate \(actual) Hz, varispeed will absorb the ratio")
+            return actual
+        }()
 
         // Stereo Float32 is the working format throughout the chain.
-        guard let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: outSR, channels: 2) else {
+        guard let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: effectiveSR, channels: 2) else {
             throw NSError(domain: "EQEngine", code: -12,
                           userInfo: [NSLocalizedDescriptionKey: "Could not create stereo Float32 format"])
         }
@@ -260,7 +278,7 @@ final class EQEngine: @unchecked Sendable {
         // typical OS jitter (up to ~50 ms scheduling delays under load),
         // small enough that the introduced latency stays under what a
         // user would notice while DJing or watching video.
-        let ringFrames = UInt32(outSR * 0.25)
+        let ringFrames = UInt32(effectiveSR * 0.25)
         guard let ring = AudioRingBuffer(capacityFrames: ringFrames) else {
             throw NSError(domain: "EQEngine", code: -13,
                           userInfo: [NSLocalizedDescriptionKey: "Ring buffer allocation failed"])
@@ -274,7 +292,7 @@ final class EQEngine: @unchecked Sendable {
             throw NSError(domain: "EQEngine", code: -14,
                           userInfo: [NSLocalizedDescriptionKey: "InputCapture init failed"])
         }
-        try capture.start(deviceID: inDev.id, sampleRate: outSR)
+        try capture.start(deviceID: inDev.id, sampleRate: effectiveSR)
         self.inputCapture = capture
         self.inputDeviceID = inDev.id
 
@@ -407,7 +425,7 @@ final class EQEngine: @unchecked Sendable {
         // SRC for the small adjustment (sub-ppm in steady state).
         startRateUpdates()
 
-        Log.write("engine started in=\(inputUID) out=\(outputUID) sr=\(outSR) outCh=\(outChannels) ringFrames=\(ring.capacityFrames)")
+        Log.write("engine started in=\(inputUID) out=\(outputUID) sr=\(effectiveSR) outCh=\(outChannels) ringFrames=\(ring.capacityFrames)")
     }
 
     private func startRateUpdates() {
